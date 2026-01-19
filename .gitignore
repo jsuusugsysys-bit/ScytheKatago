@@ -1,0 +1,14 @@
+# Git ignore for ScytheKatago
+KataGo/cpp/build/
+lizzieyzy-main/target/
+*.exe
+*.obj
+*.o
+*.dll
+*.log
+node_modules/
+*.class
+.claude/plans/
+gtp_logs/
+test_scythe_input*.txt
+nul
