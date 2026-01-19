@@ -4,9 +4,21 @@
 
 ---
 
-## 当前版本：v1.0
+## 当前版本：v1.1
 
 ## 版本列表
+
+### v1.1 - 2026-01-20 - 修复 undo 镰刀计数 bug
+**状态**：编译通过，undo 后镰刀计数正确保持
+
+**修复**：
+- gtp.cpp: 添加 scytheTriggerHistory 追踪触发历史
+- gtp.cpp: undo 重放时正确恢复镰刀计数
+- gtp.cpp: clearBoard/setPosition 清理触发历史
+
+**测试验证**：undo 后 blackScythes=2, scytheCombo=1 ✓
+
+---
 
 ### v1.0 - 2026-01-20 - 镰刀基础功能
 **状态**：编译通过，基础镰刀功能可用
