@@ -3115,25 +3115,25 @@ int MainCmds::gtp(const vector<string>& args) {
       }
       else {
         // --- Scythe Logic: Intercept Pass ---
+        // Pass is used as a signal to trigger scythe (GUI sends pass when user clicks scythe button)
         bool scytheIntercepted = false;
         if(loc == Board::PASS_LOC) {
           const Board& rootBoard = engine->bot->getRootBoard();
-          const BoardHistory& rootHist = engine->bot->getRootHist();
-          // Check: 11x11 board, moves 11-49
+          int gtpMoveCount = (int)engine->moveHistory.size();
+          // Check: 11x11 board, moves 11-49 (use GTP layer move count for consistency)
           if(rootBoard.x_size == 11 && rootBoard.y_size == 11 &&
-             rootHist.moveHistory.size() >= 11 && rootHist.moveHistory.size() <= 49) {
+             gtpMoveCount >= 10 && gtpMoveCount <= 48) {  // After play: moves 11-49
 
-             int scythesLeft = (pla == P_BLACK) ? rootHist.blackScythes : rootHist.whiteScythes;
+             // Use GTP layer scythe counts (authoritative source)
+             int scythesLeft = (pla == P_BLACK) ? engine->gtpBlackScythes : engine->gtpWhiteScythes;
              if(scythesLeft > 0) {
-               // Enable manual trigger
-               engine->bot->setManualScytheTrigger(true);
+               // Set trigger flag - will be processed by normal play path
+               engine->gtpManualScytheTrigger = true;
                scytheIntercepted = true;
                logger.write("SCYTHE TRIGGERED manually via Pass!");
 
-               // CRITICAL FIX: We must respond to GTP and trigger re-analysis!
-               // 1. Respond success to the play command
+               // Respond success and trigger re-analysis
                response = "";
-               // 2. Force engine to think about the new state
                maybeStartPondering = true;
              }
           }
@@ -3183,8 +3183,10 @@ int MainCmds::gtp(const vector<string>& args) {
             responseIsError = true;
             response = "illegal move";
           } else {
-            // Read back combo from BoardHistory (it was decremented in makeBoardMoveAssumeLegal)
+            // Sync ALL scythe state from BoardHistory (combo was decremented in makeBoardMoveAssumeLegal)
             const BoardHistory& updatedHist = engine->bot->getRootHist();
+            engine->gtpBlackScythes = updatedHist.blackScythes;
+            engine->gtpWhiteScythes = updatedHist.whiteScythes;
             engine->gtpScytheCombo = updatedHist.scytheCombo;
           }
           maybeStartPondering = true;

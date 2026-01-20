@@ -1098,15 +1098,34 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
   numConsecValidTurnsThisGame += 1;
 
   // --- Scythe Logic Start ---
-  // NOTE: Scythe triggering is now handled in GTP layer (gtp.cpp play command)
-  // because BoardHistory.moveHistory gets cleared by setPlayerAndClearHistory().
-  // This layer only handles:
+  // This layer handles:
   // 1. scytheCombo countdown (for continuous moves)
   // 2. presumedNextMovePla setting (for engine to know whose turn it is)
+  // 3. Training mode random triggers (scytheRandomMode)
+  // Note: Manual triggers are handled in GTP layer (gtp.cpp)
 
   bool isScytheActive = false;
 
-  // Handle scytheCombo regardless of moveHistory (GTP layer sets this)
+  // Check for training mode random trigger BEFORE combo processing
+  // This happens when scytheCombo == 0 (not in a combo) and scytheRandomMode is enabled
+  if(board.x_size == 11 && board.y_size == 11 && scytheCombo == 0 && scytheRandomMode) {
+    int currentMoveNum = (int)moveHistory.size();  // Move number after this move
+    for(int triggerMove : scytheRandomTriggers) {
+      if(triggerMove == currentMoveNum) {
+        // Check if player has scythes left
+        int scythesLeft = (movePla == P_BLACK) ? blackScythes : whiteScythes;
+        if(scythesLeft > 0) {
+          // Trigger scythe: decrement count and set combo
+          if(movePla == P_BLACK) blackScythes--;
+          else whiteScythes--;
+          scytheCombo = 3;  // Will be decremented below to 2
+        }
+        break;
+      }
+    }
+  }
+
+  // Handle scytheCombo countdown
   if(board.x_size == 11 && board.y_size == 11 && scytheCombo > 0) {
     scytheCombo--;
     if(scytheCombo > 0) {

@@ -189,14 +189,18 @@ void Search::setPosition(Player pla, const Board& board, const BoardHistory& his
   bool savedScytheRandomMode = rootHistory.scytheRandomMode;
   std::vector<int> savedScytheRandomTriggers = rootHistory.scytheRandomTriggers;
 
-  // Check if this is a new game (empty move history means game restart)
-  bool isNewGame = history.moveHistory.empty();
+  // Determine if we should restore scythe state:
+  // - If saved state differs from initial (3,3,0), a game is in progress
+  // - If incoming history also has non-initial state, prefer incoming (explicit set)
+  bool savedHasProgress = (savedBlackScythes != 3 || savedWhiteScythes != 3 || savedScytheCombo != 0);
+  bool incomingHasProgress = (history.blackScythes != 3 || history.whiteScythes != 3 || history.scytheCombo != 0);
 
   rootHistory = history;
 
-  // Restore scythe state ONLY if this is NOT a new game
-  // For new games, use the fresh initial state from history
-  if(!isNewGame) {
+  // Restore saved scythe state if:
+  // 1. Saved state has progress (scythes used or combo active), AND
+  // 2. Incoming history doesn't have explicit progress (would be overwritten by clear())
+  if(savedHasProgress && !incomingHasProgress) {
     rootHistory.blackScythes = savedBlackScythes;
     rootHistory.whiteScythes = savedWhiteScythes;
     rootHistory.scytheCombo = savedScytheCombo;
