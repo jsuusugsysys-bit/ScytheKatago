@@ -361,6 +361,10 @@ namespace readboard
                 char[] separator = { ' ' }; string[] arr = a.Split(separator);
                 try
                 {
+                    // [调试] 显示收到的落子命令
+                    System.Diagnostics.Debug.WriteLine("[DEBUG] 收到落子命令: " + a);
+                    MessageBox.Show("收到落子命令: " + a + "\n坐标: (" + arr[1] + ", " + arr[2] + ")", "调试-收到place");
+
                     placeMove(int.Parse(arr[1]), int.Parse(arr[2]));
                 }
                 catch (Exception e)
@@ -2449,17 +2453,34 @@ namespace readboard
 
         public void placeMove(int x, int y)
         {
+            // [调试] 显示所有条件的状态
+            string debugInfo = string.Format(
+                "placeMove 条件检查:\n" +
+                "keepSync = {0} (需要 true)\n" +
+                "syncBoth = {1} (需要 true)\n" +
+                "width = {2}, boardW = {3} (需要 width >= boardW)\n" +
+                "type = {4}, canUseLW = {5}",
+                keepSync, syncBoth, width, boardW, type, canUseLW);
+            MessageBox.Show(debugInfo, "调试-placeMove条件");
+
             if (!keepSync || !syncBoth || width < boardW)
+            {
+                MessageBox.Show("条件不满足，落子被跳过！\n" + debugInfo, "调试-落子失败");
                 return;
+            }
+            MessageBox.Show("条件通过！准备落子到 (" + x + ", " + y + ")", "调试-开始落子");
+
             int times = 10;
             if ((type == 0) && canUseLW)
             {
+                MessageBox.Show("使用 LW 模式（后台落子）", "调试-落子模式");
                 savedPlace = true;
                 savedX = x;
                 savedY = y;
             }
             else
             {
+                MessageBox.Show("使用前台模式（模拟点击）\ntype=" + type + ", canUseLW=" + canUseLW, "调试-落子模式");
                 do
                 {
                     placeStone(x, y);
@@ -2468,6 +2489,7 @@ namespace readboard
                         break;
                 } while (Program.verifyMove && !VerifyMove(x, y, false));
             }
+            MessageBox.Show("落子完成！发送 placeComplete", "调试-落子结束");
             Send("placeComplete");
         }
 

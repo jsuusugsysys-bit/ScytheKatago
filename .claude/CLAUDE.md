@@ -2,28 +2,41 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 项目概述
+---
 
-修改版 KataGo，为 11x11 棋盘添加**镰刀规则**：第 11-49 手期间，每方有 3 次机会连续走 3 步。
+# 镰刀 KataGo
 
-**当前版本**：v1.1（详见 `.claude/VERSIONS.md`）
-
-**平台**：Windows (MSVC/CMake)，CPU (Eigen) 后端
+修改版 KataGo 围棋引擎，为 11x11 棋盘添加**镰刀规则**：第 11-49 手期间，每方有 3 次机会连续走 3 步。
 
 ## 构建命令
 
 ```batch
-build.bat              # 完整构建（首次使用，包含 zlib）
-start_scythe.bat       # 启动 GUI（lizzieyzy）
+# KataGo C++ 快速编译（增量）
+cd /d D:\ScytheKatago\KataGo\cpp\build && cmake --build . --config Release --parallel 4
+
+# KataGo 完整重建（从头配置）
+cd /d D:\ScytheKatago\KataGo\cpp && mkdir build && cd build
+cmake .. -DUSE_BACKEND=CUDA -DUSE_AVX2=1
+cmake --build . --config Release --parallel 4
+
+# lizzieyzy Java GUI 编译
+cd /d D:\ScytheKatago\lizzieyzy-main && mvn package -DskipTests
 ```
 
-**快速编译**（修改代码后）：
-```powershell
-cd D:\ScytheKatago\KataGo\cpp\build
-& 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' katago.sln /p:Configuration=Release /m
-```
+**编译输出**:
+- KataGo: `KataGo/cpp/build/Release/katago.exe`
+- lizzieyzy: `lizzieyzy-main/target/lizzie-yzy2.5.3-shaded.jar`
 
-**输出**：`KataGo/cpp/build/Release/katago.exe`
+## 神经网络后端选择
+
+| 后端 | 适用场景 | CMake 选项 |
+|------|---------|-----------|
+| **TensorRT** | NVIDIA GPU 最佳性能 | `-DUSE_BACKEND=TENSORRT` |
+| **CUDA** | NVIDIA GPU 通用 | `-DUSE_BACKEND=CUDA` |
+| **OpenCL** | AMD/Intel GPU，跨平台 | `-DUSE_BACKEND=OPENCL` |
+| **Eigen** | 纯 CPU，无 GPU | `-DUSE_BACKEND=EIGEN` |
+
+TensorRT 后端需要安装 NVIDIA TensorRT SDK。
 
 ## 测试命令
 
@@ -34,87 +47,78 @@ test_scythe_suite\run_all_tests.bat
 # 运行单个测试
 test_scythe_suite\run_single_test.bat test_basic.txt
 
-# 手动测试（GTP 交互）
-KataGo\cpp\build\Release\katago.exe gtp -model <model.bin.gz> -config scythe_config.cfg
+# 手动 GTP 测试
+KataGo\cpp\build\Release\katago.exe gtp -model kata1-b6c96.bin.gz -config scythe_config.cfg
 ```
 
-测试文件位于 `test_scythe_suite/`，包含 7 个测试场景（basic、boundary、combo、count、both_players、board_size、reset）。
-
-## 项目结构
+## 核心架构：镰刀数据流
 
 ```
-D:\ScytheKatago\
-├── KataGo\cpp\           # KataGo C++ 源码
-│   ├── game\             # 核心游戏逻辑
-│   │   ├── boardhistory.h/cpp  # 镰刀状态管理（核心修改）
-│   │   └── board.h/cpp         # 棋盘表示
-│   ├── search\           # MCTS 搜索
-│   │   └── search.cpp          # 玩家切换逻辑
-│   └── command\          # 命令行接口
-│       └── gtp.cpp             # GTP 命令 + undo + scytheTriggerHistory
-├── lizzieyzy-main\       # GUI（Java）
-│   └── target\           # 编译输出（lizzie-yzy2.5.3-shaded.jar）
-├── test_scythe_suite\    # 自动化测试套件
-├── eigen3\               # CPU 线性代数库
-├── zlib\                 # 压缩库依赖
-└── scythe_config.cfg     # 镰刀专用配置文件
+GUI 触发镰刀:
+  lizzieyzy (ScythePanel.java)
+       │
+       ▼  kata-set-param scythe_trigger true
+  gtp.cpp ─────► boardhistory.manualScytheTrigger = true
+       │
+       ▼  makeBoardMoveAssumeLegal()
+  boardhistory.cpp ─────► scytheCombo++, 扣减镰刀次数
+       │
+       ▼  presumedNextMovePla 不切换
+  search.cpp ─────► 继续为同一玩家搜索
 ```
 
-## 镰刀架构
+**关键修改文件**（镰刀逻辑）：
+- `KataGo/cpp/game/boardhistory.h:104-111` - 镰刀状态变量定义
+- `KataGo/cpp/game/boardhistory.cpp` - 触发逻辑、combo 管理、undo 恢复
+- `KataGo/cpp/command/gtp.cpp` - GTP 命令解析、状态查询
+- `KataGo/cpp/search/search.cpp` - `presumedNextMovePla` 玩家切换
 
-**状态变量** (`boardhistory.h:104-111`)：
-- `blackScythes` / `whiteScythes`: 各方剩余镰刀次数（初始3）
-- `scytheCombo`: 当前连续落子计数（0-3）
-- `manualScytheTrigger`: GUI 手动触发标志
-- `scytheRandomMode`: 训练模式随机触发开关
-- `scytheRandomTriggers`: 预生成的随机触发手数列表
+## 项目目录
 
-**触发历史追踪** (`gtp.cpp`)：
-- `scytheTriggerHistory`: 记录每次镰刀触发的手数，undo 时用于正确恢复计数
-
-**核心流程**：
-1. GUI 发送 `kata-set-param scythe_trigger true`
-2. `gtp.cpp` 设置 `manualScytheTrigger = true`
-3. `boardhistory.cpp:makeBoardMoveAssumeLegal` 检测触发，递减计数，设置 combo
-4. `presumedNextMovePla` 在 combo 期间不切换玩家
-5. `search.cpp:355` 使用 `presumedNextMovePla` 决定下一手玩家
+| 目录 | 说明 |
+|------|------|
+| `KataGo/cpp/` | C++ 引擎源码 |
+| `lizzieyzy-main/` | Java GUI（Maven 项目） |
+| `readboard-src/` | 野狐棋盘同步工具（C# 版） |
+| `readboard-java-src/` | 野狐棋盘同步工具（Java 版） |
+| `test_scythe_suite/` | 镰刀 GTP 自动化测试 |
+| `scythe_lizzie/` | 镰刀版 lizzieyzy 运行环境 |
 
 ## 镰刀 GTP 命令
 
 ```
-kata-get-scythe-status              # 查询状态（JSON）
+kata-get-scythe-status              # 查询状态（返回 JSON）
 kata-set-param scythe_trigger true  # 触发镰刀
 kata-set-param scythe_count_black 3 # 设置黑方镰刀数
 kata-set-param scythe_count_white 3 # 设置白方镰刀数
 ```
 
-## 重要约束
-
-- **GTP 协议**：调试输出必须发到 `stderr`，绝不能发到 `stdout`
-- **镰刀条件**：棋盘 11x11 + 手数 11-49 + 剩余镰刀 > 0
-- **C++17**：使用 `std::shuffle`（不用 `std::random_shuffle`）
-- **undo 处理**：必须保存/恢复镰刀状态（通过 `scytheTriggerHistory` 追踪）
-
-## 自定义 Skill 命令
-
-项目专用的快捷命令（位于 `.claude/commands/`）：
-
-- `/build` - 编译 KataGo 项目
-- `/gui` - 编译 lizzieyzy 并启动调试
-- `/test` - 为镰刀功能创建或运行测试
-- `/fix` - 分析并修复编译错误或运行时错误
-- `/debug` - 调试 KataGo 或镰刀功能问题
-- `/review` - 审查当前分支的所有代码改动
-- `/explain` - 详细解释指定代码的工作原理
-- `/status` - 显示项目当前状态
-- `/gtp` - 启动 KataGo GTP 交互模式进行手动测试
-- `/optimize` - 分析性能并提出优化建议
-- `/push` - 提交所有变更文件并推送到远程仓库
+**状态响应示例**：
+```json
+{"blackScythes":3,"whiteScythes":3,"scytheCombo":0,"nextPlayer":"B","isComboActive":false,"moveNumber":10,"canUseScythe":true}
+```
 
 ## 开发规范
 
-- **语言**：始终使用中文交流
+详细规范见 `.claude/rules/` 目录：
+- `cpp.md` - C++ 代码规范（缩进、GTP 协议约束）
+- `java.md` - Java 代码规范
+- `scythe.md` - 镰刀规则详解
+
+**核心约束**：
+- **GTP 协议**: C++ 调试输出必须发到 `stderr`，绝不能发到 `stdout`
+- **undo 处理**: 必须通过 `scytheTriggerHistory` 保存/恢复镰刀状态
+
+## Skill 命令
+
+| 命令 | 说明 |
+|------|------|
+| `/gui` | 启动镰刀版 lizzieyzy |
+| `/build` | 编译 KataGo 和 lizzieyzy |
+| `/push` | 提交并推送到远程 |
+
+## 开发注意事项
+
+- **语言**: 始终使用中文
 - **修改前先读取代码**
-- **命令要清晰**：长命令单独一行给出，不要放在表格里
-- **同一 bug 出现 2 次时**：先反思原因，确立修改计划后再操作
-- **定期提交**：每次改动到一定程度提交到分支或主线，避免陷入死循环
+- **同一 bug 出现 2 次**: 先反思原因，确立修改计划后再操作

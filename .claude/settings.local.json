@@ -1,7 +1,29 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cmake --build:*)"
+      "Bash(cmake --build *)",
+      "Bash(git *)",
+      "Bash(mvn *)",
+      "Bash(cd *)",
+      "Bash(dir *)",
+      "Bash(type *)",
+      "Bash(ssh:*)",
+      "Bash(powershell.exe:*)",
+      "mcp__filesystem__search_files",
+      "mcp__github__get_file_contents",
+      "WebFetch(domain:github.com)",
+      "Bash(gh repo view:*)",
+      "Bash(gh api:*)",
+      "Bash(claude skill add:*)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"D:\\\\ScytheKatago\\\\readboard-src\\\\readboard\\\\readboard.csproj\" /p:Configuration=Release /t:Rebuild)",
+      "Bash(where:*)",
+      "Bash(cmd /c \"where msbuild\")",
+      "Bash(cmd /c \"dir /s /b \"\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\*MSBuild.exe\"\" 2>nul | head -5\")",
+      "Skill(superpowers:brainstorming)",
+      "Skill(confirm-logic)",
+      "Bash(powershell:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\n添加项目交接文档 HANDOVER.md\n\n- 总结 v1.4 完成的工作\n- 记录 readboard 镰刀检测修复细节\n- 明确下一步任务：自动落子功能\n- 提供完整的编译命令和测试流程\n- 更新 CURRENT_SESSION.md 反映最新状态\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Skill(commit-commands:commit)"
     ]
   }
 }

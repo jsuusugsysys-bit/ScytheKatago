@@ -9,6 +9,7 @@ lizzieyzy-main/target/
 node_modules/
 *.class
 .claude/plans/
+.claude/CLAUDE.local.md
 gtp_logs/
 test_scythe_input*.txt
 nul
