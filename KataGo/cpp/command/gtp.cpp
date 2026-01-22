@@ -375,7 +375,8 @@ struct GTPEngine {
   vector<Move> moveHistory;
 
   // Scythe: Track which move indices triggered scythe (for undo replay)
-  vector<int> scytheTriggerHistory;
+  // Each entry is (moveIndex, player) where player: 0=Black, 1=White
+  vector<std::pair<int, int>> scytheTriggerHistory;
 
   // Scythe: Authoritative scythe state (independent of BoardHistory)
   int gtpBlackScythes;
@@ -679,26 +680,29 @@ struct GTPEngine {
     vector<Move> moveHistoryCopy = moveHistory;
     int undoTargetSize = (int)moveHistoryCopy.size() - 1;
 
-    // Scythe: Save scythe state and trigger history before undo
-    const BoardHistory& oldHist = bot->getRootHist();
-    int savedBlackScythes = oldHist.blackScythes;
-    int savedWhiteScythes = oldHist.whiteScythes;
-    vector<int> triggerHistoryCopy = scytheTriggerHistory;
-
-    // Remove any trigger points that are at or after the undo target
-    vector<int> validTriggers;
-    for(int idx : triggerHistoryCopy) {
-      if(idx < undoTargetSize)
-        validTriggers.push_back(idx);
+    // Scythe: Calculate correct scythe counts based on trigger history
+    // Count how many triggers will remain valid after undo
+    int blackTriggersRemaining = 0;
+    int whiteTriggersRemaining = 0;
+    vector<std::pair<int, int>> validTriggers;
+    for(const auto& trigger : scytheTriggerHistory) {
+      if(trigger.first < undoTargetSize) {
+        validTriggers.push_back(trigger);
+        if(trigger.second == 0) blackTriggersRemaining++;
+        else whiteTriggersRemaining++;
+      }
     }
+    // Correct scythe counts = 3 - number of triggers
+    int correctBlackScythes = 3 - blackTriggersRemaining;
+    int correctWhiteScythes = 3 - whiteTriggersRemaining;
 
     Board undoneBoard = initialBoard;
     BoardHistory undoneHist(undoneBoard,initialPla,currentRules,0);
     undoneHist.setInitialTurnNumber(bot->getRootHist().initialTurnNumber);
 
-    // Scythe: Restore scythe counts (they persist across undo)
-    undoneHist.blackScythes = savedBlackScythes;
-    undoneHist.whiteScythes = savedWhiteScythes;
+    // Scythe: Set correct scythe counts based on trigger history
+    undoneHist.blackScythes = correctBlackScythes;
+    undoneHist.whiteScythes = correctWhiteScythes;
     undoneHist.scytheCombo = 0;  // Reset combo on undo
     undoneHist.manualScytheTrigger = false;
 
@@ -710,10 +714,10 @@ struct GTPEngine {
 
     for(int i = 0; i < undoTargetSize; i++) {
       // Check if scythe should be triggered at this move
-      for(int triggerIdx : validTriggers) {
-        if(triggerIdx == i) {
+      for(const auto& trigger : validTriggers) {
+        if(trigger.first == i) {
           bot->setManualScytheTrigger(true);
-          scytheTriggerHistory.push_back(i);
+          scytheTriggerHistory.push_back(trigger);  // Restore trigger with player info
           break;
         }
       }
@@ -727,14 +731,14 @@ struct GTPEngine {
 
     // Force restore correct scythe counts (replay may have consumed them again)
     BoardHistory& finalHist = const_cast<BoardHistory&>(bot->getRootHist());
-    finalHist.blackScythes = savedBlackScythes;
-    finalHist.whiteScythes = savedWhiteScythes;
+    finalHist.blackScythes = correctBlackScythes;
+    finalHist.whiteScythes = correctWhiteScythes;
 
     // Sync GTPEngine's authoritative scythe state with BoardHistory
     // This is critical: kata-get-scythe-status returns gtp* variables,
     // so they must match BoardHistory after undo
-    gtpBlackScythes = savedBlackScythes;
-    gtpWhiteScythes = savedWhiteScythes;
+    gtpBlackScythes = correctBlackScythes;
+    gtpWhiteScythes = correctWhiteScythes;
     gtpScytheCombo = finalHist.scytheCombo;
 
     return true;
@@ -1108,8 +1112,14 @@ struct GTPEngine {
     printGTPResponse(response,responseIsError);
     if(moveLocToPlay != Board::NULL_LOC && playChosenMove) {
       bool suc = bot->makeMove(moveLocToPlay,pla,preventEncore);
-      if(suc)
+      if(suc) {
         moveHistory.push_back(Move(moveLocToPlay,pla));
+        // Sync scythe state after genmove (same as play command)
+        const BoardHistory& updatedHist = bot->getRootHist();
+        gtpBlackScythes = updatedHist.blackScythes;
+        gtpWhiteScythes = updatedHist.whiteScythes;
+        gtpScytheCombo = updatedHist.scytheCombo;
+      }
       assert(suc);
       (void)suc; //Avoid warning when asserts are off
 
@@ -2601,7 +2611,7 @@ int MainCmds::gtp(const vector<string>& args) {
       status["nextPlayer"] = (hist.presumedNextMovePla == P_BLACK) ? "B" : "W";
       status["isComboActive"] = (engine->gtpScytheCombo > 0);
       status["moveNumber"] = gtpMoveCount;
-      status["canUseScythe"] = (gtpMoveCount >= 11 && gtpMoveCount <= 49);
+      status["canUseScythe"] = true;  // No move number restriction - can use scythe anytime
       response = status.dump();
     }
     // --------------------------------------
@@ -2720,11 +2730,14 @@ int MainCmds::gtp(const vector<string>& args) {
           if(paramKey == "scythe_trigger") {
              engine->bot->setManualScytheTrigger(true);
              engine->gtpManualScytheTrigger = true;  // Also update GTPEngine's authoritative state!
-             // Record the move index where scythe will trigger (next move)
-             engine->scytheTriggerHistory.push_back((int)engine->moveHistory.size());
+             // Record the move index and player where scythe will trigger
+             Player nextPla = engine->bot->getRootHist().presumedNextMovePla;
+             int playerIdx = (nextPla == P_BLACK) ? 0 : 1;
+             engine->scytheTriggerHistory.push_back(std::make_pair((int)engine->moveHistory.size(), playerIdx));
              maybeStartPondering = true; // Refresh analysis
              response = "Scythe triggered via param hack!";
-             cerr << "SCYTHE: Manual trigger activated at move " << engine->moveHistory.size() << endl;
+             cerr << "SCYTHE: Manual trigger activated at move " << engine->moveHistory.size()
+                  << " for " << (nextPla == P_BLACK ? "Black" : "White") << endl;
              goto scythe_handled;
           }
           if(paramKey == "scythe_count_black") {
@@ -3119,10 +3132,8 @@ int MainCmds::gtp(const vector<string>& args) {
         bool scytheIntercepted = false;
         if(loc == Board::PASS_LOC) {
           const Board& rootBoard = engine->bot->getRootBoard();
-          int gtpMoveCount = (int)engine->moveHistory.size();
-          // Check: 11x11 board, moves 11-49 (use GTP layer move count for consistency)
-          if(rootBoard.x_size == 11 && rootBoard.y_size == 11 &&
-             gtpMoveCount >= 10 && gtpMoveCount <= 48) {  // After play: moves 11-49
+          // Check: 11x11 board only (no move number restriction)
+          if(rootBoard.x_size == 11 && rootBoard.y_size == 11) {
 
              // Use GTP layer scythe counts (authoritative source)
              int scythesLeft = (pla == P_BLACK) ? engine->gtpBlackScythes : engine->gtpWhiteScythes;
@@ -3146,13 +3157,11 @@ int MainCmds::gtp(const vector<string>& args) {
           // cleared by setPlayerAndClearHistory(), making condition checks fail.
 
           const Board& board = engine->bot->getRootBoard();
-          int gtpMoveCount = (int)engine->moveHistory.size();  // Current move count BEFORE play
           bool is11x11 = (board.x_size == 11 && board.y_size == 11);
-          bool inScytheRange = (gtpMoveCount >= 10 && gtpMoveCount <= 48);  // After play: 11-49
 
-          // Determine if scythe should trigger
+          // Determine if scythe should trigger (no move number restriction)
           bool shouldTriggerScythe = false;
-          if(engine->gtpManualScytheTrigger && is11x11 && inScytheRange) {
+          if(engine->gtpManualScytheTrigger && is11x11) {
             int scythesLeft = (pla == P_BLACK) ? engine->gtpBlackScythes : engine->gtpWhiteScythes;
             if(scythesLeft > 0) {
               shouldTriggerScythe = true;

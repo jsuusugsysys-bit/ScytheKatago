@@ -315,6 +315,9 @@ void BoardHistory::clear(const Board& board, Player pla, const Rules& r, int ePh
     recentBoards[i] = board;
   currentRecentBoardIdx = 0;
 
+  // Scythe: Save presumedNextMovePla before it gets overwritten, for potential restoration
+  Player savedPresumedNextMovePla = presumedNextMovePla;
+
   presumedNextMovePla = pla;
 
   for(int y = 0; y<board.y_size; y++) {
@@ -376,6 +379,15 @@ void BoardHistory::clear(const Board& board, Player pla, const Rules& r, int ePh
 
       std::sort(scytheRandomTriggers.begin(), scytheRandomTriggers.end());
     }
+  }
+  else {
+    // Scythe: When preserving scythe state AND we're in a scythe combo,
+    // restore presumedNextMovePla to maintain correct player turn.
+    // Only do this when scytheCombo > 0 (active combo), otherwise use the passed pla.
+    if(scytheCombo > 0) {
+      presumedNextMovePla = savedPresumedNextMovePla;
+    }
+    // When scytheCombo == 0, keep the pla that was set above (line 321)
   }
 
   //Handle encore phase
@@ -826,8 +838,13 @@ void BoardHistory::setKoRecapBlocked(Loc loc, bool b) {
 }
 
 bool BoardHistory::isLegal(const Board& board, Loc moveLoc, Player movePla) const {
-  if(movePla != presumedNextMovePla)
-    return false;
+  // Scythe rule: Only check player alternation for 11x11 boards during normal play
+  // Don't apply this check during encore phase (different player switching rules)
+  if(board.x_size == 11 && board.y_size == 11 && encorePhase == 0) {
+    // Allow same player to continue during scythe combo
+    if(movePla != presumedNextMovePla && scytheCombo == 0)
+      return false;
+  }
 
   //Ko-moves in the encore that are recapture blocked are interpreted as pass-for-ko, so they are legal
   if(encorePhase > 0) {
@@ -1109,7 +1126,9 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
   // Check for training mode random trigger BEFORE combo processing
   // This happens when scytheCombo == 0 (not in a combo) and scytheRandomMode is enabled
   if(board.x_size == 11 && board.y_size == 11 && scytheCombo == 0 && scytheRandomMode) {
-    int currentMoveNum = (int)moveHistory.size();  // Move number after this move
+    // Use getCurrentTurnNumber() instead of moveHistory.size() for correct trigger detection
+    // This handles cases where moveHistory was cleared but initialTurnNumber was preserved
+    int currentMoveNum = (int)getCurrentTurnNumber();  // Move number after this move
     for(int triggerMove : scytheRandomTriggers) {
       if(triggerMove == currentMoveNum) {
         // Check if player has scythes left

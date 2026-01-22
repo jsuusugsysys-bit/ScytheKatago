@@ -223,8 +223,14 @@ void Search::setPlayerAndClearHistory(Player pla) {
   //Preserve this value even when we get multiple moves in a row by some player
   bool assumeMultipleStartingBlackMovesAreHandicap = rootHistory.assumeMultipleStartingBlackMovesAreHandicap;
 
+  // Scythe: Save cumulative turn number before clear (for correct scythe trigger detection)
+  int64_t savedTurnNumber = rootHistory.getCurrentTurnNumber();
+
   //Clear history but preserve scythe state (counts, combo, triggers)
   rootHistory.clear(rootBoard,rootPla,rules,rootHistory.encorePhase, true);
+
+  // Scythe: Restore cumulative turn number so trigger detection uses correct move number
+  rootHistory.setInitialTurnNumber(savedTurnNumber);
 
   rootHistory.setAssumeMultipleStartingBlackMovesAreHandicap(assumeMultipleStartingBlackMovesAreHandicap);
 
@@ -1345,7 +1351,8 @@ bool Search::playoutDescend(
 
       //Make the move! We need to make the move before we create the node so we can see the new state and get the right graphHash.
       thread.history.makeBoardMoveAssumeLegal(thread.board,bestChildMoveLoc,thread.pla,rootKoHashTable);
-      thread.pla = getOpp(thread.pla);
+      // Scythe: Use presumedNextMovePla from history (handles scythe combo correctly)
+      thread.pla = thread.history.presumedNextMovePla;
       if(searchParams.useGraphSearch)
         thread.graphHash = GraphHash::getGraphHash(
           thread.graphHash, thread.history, thread.pla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite
@@ -1409,7 +1416,8 @@ bool Search::playoutDescend(
 
       //Make the move!
       thread.history.makeBoardMoveAssumeLegal(thread.board,bestChildMoveLoc,thread.pla,rootKoHashTable);
-      thread.pla = getOpp(thread.pla);
+      // Scythe: Use presumedNextMovePla from history (handles scythe combo correctly)
+      thread.pla = thread.history.presumedNextMovePla;
       if(searchParams.useGraphSearch)
         thread.graphHash = GraphHash::getGraphHash(
           thread.graphHash, thread.history, thread.pla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite

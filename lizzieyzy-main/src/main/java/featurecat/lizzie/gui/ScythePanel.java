@@ -30,41 +30,59 @@ public class ScythePanel extends JPanel {
   private JLabel whiteLabel;
   private JLabel blackCountLabel;
   private JLabel whiteCountLabel;
+  private JLabel comboLabel; // 连击提示标签
 
   // 闪烁效果
   private Timer flashTimer;
   private boolean flashState = false;
   private String flashingColor = ""; // "B" or "W"
-  private int flashCount = 0;
+  private boolean persistentFlash = false; // 是否持续闪烁（连击期间）
 
   // 状态刷新定时器
   private Timer refreshTimer;
 
+  // 自动检测器
+  private ScytheDetector detector;
+  private JLabel autoDetectLabel;
+
+  // 颜色常量
+  private static final Color COLOR_GOLD = new Color(255, 215, 0); // 金色
+  private static final Color COLOR_ORANGE = new Color(255, 140, 0); // 橙色
+  private static final Color COLOR_BLACK_STONE = new Color(30, 30, 30); // 深灰黑
+  private static final Color COLOR_WHITE_STONE = new Color(240, 240, 240); // 浅灰白
+
   public ScythePanel() {
-    setLayout(new FlowLayout(FlowLayout.CENTER, 10, 5));
-    setOpaque(false);
+    setLayout(new FlowLayout(FlowLayout.CENTER, 8, 5));
+    setOpaque(true);
+    setBackground(new Color(40, 40, 40, 220)); // 半透明深灰背景
 
     // 创建黑棋图标和数字
     blackLabel = new JLabel("\u25CF"); // 黑色圆点
-    blackLabel.setFont(new Font("Dialog", Font.BOLD, 24));
-    blackLabel.setForeground(Color.BLACK);
+    blackLabel.setFont(new Font("Dialog", Font.BOLD, 22));
+    blackLabel.setForeground(COLOR_BLACK_STONE);
     blackLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
-    blackLabel.setToolTipText("点击触发黑方镰刀 / Click to trigger Black's scythe");
+    blackLabel.setToolTipText("点击触发黑方镰刀");
 
     blackCountLabel = new JLabel("3");
-    blackCountLabel.setFont(new Font("Dialog", Font.BOLD, 18));
-    blackCountLabel.setForeground(Color.BLACK);
+    blackCountLabel.setFont(new Font("Dialog", Font.BOLD, 16));
+    blackCountLabel.setForeground(Color.YELLOW);
 
     // 创建白棋图标和数字
     whiteLabel = new JLabel("\u25CB"); // 白色圆点
-    whiteLabel.setFont(new Font("Dialog", Font.BOLD, 24));
-    whiteLabel.setForeground(Color.BLACK);
+    whiteLabel.setFont(new Font("Dialog", Font.BOLD, 22));
+    whiteLabel.setForeground(COLOR_WHITE_STONE);
     whiteLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
-    whiteLabel.setToolTipText("点击触发白方镰刀 / Click to trigger White's scythe");
+    whiteLabel.setToolTipText("点击触发白方镰刀");
 
     whiteCountLabel = new JLabel("3");
-    whiteCountLabel.setFont(new Font("Dialog", Font.BOLD, 18));
-    whiteCountLabel.setForeground(Color.BLACK);
+    whiteCountLabel.setFont(new Font("Dialog", Font.BOLD, 16));
+    whiteCountLabel.setForeground(Color.CYAN);
+
+    // 连击提示标签
+    comboLabel = new JLabel("");
+    comboLabel.setFont(new Font("Dialog", Font.BOLD, 14));
+    comboLabel.setForeground(COLOR_GOLD);
+    comboLabel.setVisible(false);
 
     // 添加点击事件
     blackLabel.addMouseListener(
@@ -83,35 +101,47 @@ public class ScythePanel extends JPanel {
           }
         });
 
-    // 布局: ● 3  |  ○ 3
+    // 初始化自动检测器
+    detector = new ScytheDetector();
+    detector.setScythePanel(this);
+
+    // 自动检测开关标签
+    autoDetectLabel = new JLabel("[自动]");
+    autoDetectLabel.setFont(new Font("Dialog", Font.PLAIN, 11));
+    autoDetectLabel.setForeground(Color.GRAY);
+    autoDetectLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
+    autoDetectLabel.setToolTipText("点击开启/关闭野狐镰刀自动检测");
+    autoDetectLabel.addMouseListener(
+        new MouseAdapter() {
+          @Override
+          public void mouseClicked(MouseEvent e) {
+            toggleAutoDetect();
+          }
+        });
+
+    // 布局: ● 3 | ○ 3 [连下X手] [自动]
     add(blackLabel);
     add(blackCountLabel);
-    add(new JLabel("  |  "));
+    JLabel separator = new JLabel("|");
+    separator.setForeground(Color.GRAY);
+    add(separator);
     add(whiteLabel);
     add(whiteCountLabel);
+    add(comboLabel);
+    add(autoDetectLabel);
 
-    // 初始化闪烁定时器
+    // 初始化闪烁定时器 - 更快的闪烁频率
     flashTimer =
         new Timer(
-            200,
+            150,
             e -> {
               flashState = !flashState;
               updateFlashDisplay();
-              flashCount++;
-              if (flashCount >= 10) { // 闪烁5次后停止
+              // 如果不是持续闪烁模式且闪烁了足够次数，停止
+              if (!persistentFlash && ++flashCount >= 10) {
                 stopFlash();
               }
             });
-
-    // 初始化状态刷新定时器 (已禁用自动刷新，避免性能问题)
-    // 改为事件驱动：仅在点击触发或棋盘落子后刷新
-    // refreshTimer =
-    //     new Timer(
-    //         1000,
-    //         e -> {
-    //           refreshScytheStatus();
-    //         });
-    // refreshTimer.start();
 
     // 延迟初始化查询（等待引擎启动）
     Timer initTimer =
@@ -123,6 +153,8 @@ public class ScythePanel extends JPanel {
     initTimer.setRepeats(false);
     initTimer.start();
   }
+
+  private int flashCount = 0;
 
   /**
    * 触发镰刀
@@ -145,11 +177,11 @@ public class ScythePanel extends JPanel {
     // 检查是否有剩余镰刀
     if (color.equals("black") && blackScythes <= 0) {
       System.err.println("DEBUG: No black scythes remaining");
-      return; // 没有镰刀了，不触发
+      return;
     }
     if (color.equals("white") && whiteScythes <= 0) {
       System.err.println("DEBUG: No white scythes remaining");
-      return; // 没有镰刀了，不触发
+      return;
     }
 
     System.err.println("DEBUG: Triggering scythe for " + color);
@@ -159,22 +191,17 @@ public class ScythePanel extends JPanel {
     scythePendingPlayer = color.equals("black");
 
     // 发送触发命令
-    if (color.equals("black")) {
-      System.err.println("DEBUG: Sending kata-set-param command for black");
-      Lizzie.leelaz.sendCommand("kata-set-param scythe_trigger true");
-      // 立即显示数字减少（乐观更新）
-      optimisticDecrement("B");
-      startFlash("B");
-    } else {
-      System.err.println("DEBUG: Sending kata-set-param command for white");
-      Lizzie.leelaz.sendCommand("kata-set-param scythe_trigger true");
-      // 立即显示数字减少（乐观更新）
-      optimisticDecrement("W");
-      startFlash("W");
-    }
+    Lizzie.leelaz.sendCommand("kata-set-param scythe_trigger true");
 
-    // 不要立即刷新状态，避免覆盖乐观更新
-    // 等待落子后再刷新
+    // 立即显示数字减少（乐观更新）
+    String playerCode = color.equals("black") ? "B" : "W";
+    optimisticDecrement(playerCode);
+
+    // 激活连击状态并开始持续闪烁
+    guiComboRemaining = 3;
+    guiComboPlayer = color.equals("black");
+    updateComboDisplay();
+    startPersistentFlash(playerCode);
   }
 
   /** 从引擎获取镰刀状态 */
@@ -183,8 +210,6 @@ public class ScythePanel extends JPanel {
       return;
     }
 
-    // 发送状态查询命令
-    // 注意：这里需要异步处理响应，暂时用简单方式
     try {
       Lizzie.leelaz.sendCommand("kata-get-scythe-status");
     } catch (Exception e) {
@@ -206,12 +231,6 @@ public class ScythePanel extends JPanel {
       boolean newIsComboActive = status.optBoolean("isComboActive", false);
       String newNextPlayer = status.optString("nextPlayer", "B");
 
-      // 只有当状态真正改变时才更新显示
-      boolean changed = false;
-      if (blackScythes != newBlackScythes || whiteScythes != newWhiteScythes) {
-        changed = true;
-      }
-
       blackScythes = newBlackScythes;
       whiteScythes = newWhiteScythes;
       scytheCombo = newScytheCombo;
@@ -223,13 +242,21 @@ public class ScythePanel extends JPanel {
       whiteCountLabel.setText(String.valueOf(whiteScythes));
 
       // 根据剩余数量设置颜色
-      blackCountLabel.setForeground(blackScythes > 0 ? Color.BLACK : Color.GRAY);
-      whiteCountLabel.setForeground(whiteScythes > 0 ? Color.BLACK : Color.GRAY);
+      blackCountLabel.setForeground(blackScythes > 0 ? Color.YELLOW : Color.GRAY);
+      whiteCountLabel.setForeground(whiteScythes > 0 ? Color.CYAN : Color.GRAY);
 
-      // 如果正在连击中，显示闪烁
-      if (isComboActive && flashingColor.isEmpty()) {
-        startFlash(nextPlayer);
-      } else if (!isComboActive && !flashingColor.isEmpty()) {
+      // 同步 GUI 连击状态
+      if (newIsComboActive && newScytheCombo > 0) {
+        guiComboRemaining = newScytheCombo;
+        guiComboPlayer = newNextPlayer.equals("B");
+        updateComboDisplay();
+        if (!persistentFlash) {
+          startPersistentFlash(newNextPlayer);
+        }
+      } else if (!newIsComboActive && guiComboRemaining > 0) {
+        // 连击结束
+        guiComboRemaining = 0;
+        updateComboDisplay();
         stopFlash();
       }
 
@@ -239,12 +266,24 @@ public class ScythePanel extends JPanel {
     }
   }
 
-  /** 乐观更新：立即减少镰刀次数（不等引擎响应） 用于提供即时反馈 */
+  /** 更新连击显示 */
+  private void updateComboDisplay() {
+    if (guiComboRemaining > 0) {
+      String player = guiComboPlayer ? "黑" : "白";
+      comboLabel.setText("[" + player + "连" + guiComboRemaining + "手]");
+      comboLabel.setVisible(true);
+    } else {
+      comboLabel.setText("");
+      comboLabel.setVisible(false);
+    }
+    repaint();
+  }
+
+  /** 乐观更新：立即减少镰刀次数 */
   public void optimisticDecrement(String color) {
     if (color.equals("B") && blackScythes > 0) {
       blackScythes--;
       blackCountLabel.setText(String.valueOf(blackScythes));
-      // 如果用完了，改变颜色提示
       if (blackScythes == 0) {
         blackCountLabel.setForeground(Color.GRAY);
       }
@@ -252,7 +291,6 @@ public class ScythePanel extends JPanel {
     } else if (color.equals("W") && whiteScythes > 0) {
       whiteScythes--;
       whiteCountLabel.setText(String.valueOf(whiteScythes));
-      // 如果用完了，改变颜色提示
       if (whiteScythes == 0) {
         whiteCountLabel.setForeground(Color.GRAY);
       }
@@ -261,7 +299,20 @@ public class ScythePanel extends JPanel {
   }
 
   /**
-   * 开始闪烁效果
+   * 开始持续闪烁（连击期间）
+   *
+   * @param color "B" 或 "W"
+   */
+  private void startPersistentFlash(String color) {
+    flashingColor = color;
+    flashCount = 0;
+    flashState = true;
+    persistentFlash = true;
+    flashTimer.start();
+  }
+
+  /**
+   * 开始短暂闪烁（触发确认）
    *
    * @param color "B" 或 "W"
    */
@@ -269,6 +320,7 @@ public class ScythePanel extends JPanel {
     flashingColor = color;
     flashCount = 0;
     flashState = true;
+    persistentFlash = false;
     flashTimer.start();
   }
 
@@ -277,23 +329,30 @@ public class ScythePanel extends JPanel {
     flashTimer.stop();
     flashingColor = "";
     flashState = false;
+    persistentFlash = false;
     // 恢复正常颜色
-    blackLabel.setForeground(Color.BLACK);
-    blackCountLabel.setForeground(Color.BLACK);
-    whiteLabel.setForeground(Color.BLACK);
-    whiteCountLabel.setForeground(Color.BLACK);
+    blackLabel.setForeground(COLOR_BLACK_STONE);
+    blackCountLabel.setForeground(blackScythes > 0 ? Color.YELLOW : Color.GRAY);
+    whiteLabel.setForeground(COLOR_WHITE_STONE);
+    whiteCountLabel.setForeground(whiteScythes > 0 ? Color.CYAN : Color.GRAY);
+    repaint();
   }
 
   /** 更新闪烁显示 */
   private void updateFlashDisplay() {
-    Color flashColor = flashState ? Color.RED : Color.BLACK;
+    // 使用金色和橙色交替，更醒目
+    Color flashColor = flashState ? COLOR_GOLD : COLOR_ORANGE;
+    Color normalColor = flashState ? Color.WHITE : Color.LIGHT_GRAY;
 
     if (flashingColor.equals("B")) {
       blackLabel.setForeground(flashColor);
       blackCountLabel.setForeground(flashColor);
+      // 连击提示也闪烁
+      comboLabel.setForeground(flashState ? COLOR_GOLD : Color.WHITE);
     } else if (flashingColor.equals("W")) {
       whiteLabel.setForeground(flashColor);
       whiteCountLabel.setForeground(flashColor);
+      comboLabel.setForeground(flashState ? COLOR_GOLD : Color.WHITE);
     }
     repaint();
   }
@@ -330,15 +389,46 @@ public class ScythePanel extends JPanel {
     whiteScythes = 3;
     scytheCombo = 0;
     isComboActive = false;
-    guiComboRemaining = 0; // 重置GUI连击状态
-    scythePending = false; // 重置待触发标志
+    guiComboRemaining = 0;
+    scythePending = false;
     blackCountLabel.setText("3");
     whiteCountLabel.setText("3");
-    // 重置颜色为黑色（可用状态）
-    blackCountLabel.setForeground(Color.BLACK);
-    whiteCountLabel.setForeground(Color.BLACK);
+    blackCountLabel.setForeground(Color.YELLOW);
+    whiteCountLabel.setForeground(Color.CYAN);
+    updateComboDisplay();
     stopFlash();
     repaint();
+  }
+
+  /** 切换自动检测状态 */
+  private void toggleAutoDetect() {
+    if (detector == null) {
+      return;
+    }
+
+    detector.toggle();
+    updateAutoDetectLabel();
+  }
+
+  /** 更新自动检测标签显示 */
+  private void updateAutoDetectLabel() {
+    if (detector != null && detector.isEnabled()) {
+      autoDetectLabel.setText("[自动:开]");
+      autoDetectLabel.setForeground(new Color(0, 200, 0)); // 亮绿色
+    } else {
+      autoDetectLabel.setText("[自动]");
+      autoDetectLabel.setForeground(Color.GRAY);
+    }
+    repaint();
+  }
+
+  /**
+   * 获取自动检测器
+   *
+   * @return ScytheDetector 实例
+   */
+  public ScytheDetector getDetector() {
+    return detector;
   }
 
   /** 停止定时器 (关闭时调用) */
@@ -348,6 +438,9 @@ public class ScythePanel extends JPanel {
     }
     if (refreshTimer != null) {
       refreshTimer.stop();
+    }
+    if (detector != null) {
+      detector.shutdown();
     }
   }
 
@@ -365,7 +458,7 @@ public class ScythePanel extends JPanel {
   }
 
   /**
-   * 检查是否在GUI连击中（同步判断，不依赖异步的引擎响应）
+   * 检查是否在GUI连击中
    *
    * @return true 如果在连击中
    */
@@ -382,13 +475,13 @@ public class ScythePanel extends JPanel {
     return guiComboPlayer;
   }
 
-  /** 落子前调用，检查是否有待触发的镰刀 如果有，激活连击状态 */
+  /** 落子前调用，检查是否有待触发的镰刀 */
   public void onBeforeMove() {
     if (scythePending) {
-      // 激活连击状态
-      guiComboRemaining = 3; // 接下来3手都是同一玩家
+      guiComboRemaining = 3;
       guiComboPlayer = scythePendingPlayer;
-      scythePending = false; // 清除待触发标志
+      scythePending = false;
+      updateComboDisplay();
     }
   }
 
@@ -396,6 +489,11 @@ public class ScythePanel extends JPanel {
   public void decrementGuiCombo() {
     if (guiComboRemaining > 0) {
       guiComboRemaining--;
+      updateComboDisplay();
+      // 连击结束时停止闪烁
+      if (guiComboRemaining == 0) {
+        stopFlash();
+      }
     }
   }
 }
