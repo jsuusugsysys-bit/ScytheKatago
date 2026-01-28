@@ -5,6 +5,10 @@
 
 using namespace std;
 
+// Scythe move range static variables (default: Yahu rules 15-54)
+int BoardHistory::scytheMinMove = 15;
+int BoardHistory::scytheMaxMove = 54;
+
 static Hash128 getKoHash(const Rules& rules, const Board& board, Player pla, int encorePhase, Hash128 koRecapBlockHash) {
   if(rules.koRule == Rules::KO_SITUATIONAL || rules.koRule == Rules::KO_SIMPLE || encorePhase > 0)
     return board.pos_hash ^ Board::ZOBRIST_PLAYER_HASH[pla] ^ koRecapBlockHash;
@@ -55,7 +59,8 @@ BoardHistory::BoardHistory()
    isPastNormalPhaseEnd(false),
    isGameFinished(false),winner(C_EMPTY),finalWhiteMinusBlackScore(0.0f),
    isScored(false),isNoResult(false),isResignation(false),
-   blackScythes(3),whiteScythes(3),scytheCombo(0),manualScytheTrigger(false),
+   blackScythes(3),whiteScythes(3),scytheCombo(0),scytheComboPlayer(C_EMPTY),
+   manualScytheTrigger(false),manualScytheTriggerPlayer(C_EMPTY),
    scytheRandomMode(false),scytheRandomTriggers()
 {
   std::fill(wasEverOccupiedOrPlayed, wasEverOccupiedOrPlayed+Board::MAX_ARR_SIZE, false);
@@ -97,7 +102,8 @@ BoardHistory::BoardHistory(const Board& board, Player pla, const Rules& r, int e
    isPastNormalPhaseEnd(false),
    isGameFinished(false),winner(C_EMPTY),finalWhiteMinusBlackScore(0.0f),
    isScored(false),isNoResult(false),isResignation(false),
-   blackScythes(3),whiteScythes(3),scytheCombo(0),manualScytheTrigger(false),
+   blackScythes(3),whiteScythes(3),scytheCombo(0),scytheComboPlayer(C_EMPTY),
+   manualScytheTrigger(false),manualScytheTriggerPlayer(C_EMPTY),
    scytheRandomMode(false),scytheRandomTriggers()
 {
   std::fill(wasEverOccupiedOrPlayed, wasEverOccupiedOrPlayed+Board::MAX_ARR_SIZE, false);
@@ -139,7 +145,8 @@ BoardHistory::BoardHistory(const BoardHistory& other)
    isGameFinished(other.isGameFinished),winner(other.winner),finalWhiteMinusBlackScore(other.finalWhiteMinusBlackScore),
    isScored(other.isScored),isNoResult(other.isNoResult),isResignation(other.isResignation),
    blackScythes(other.blackScythes), whiteScythes(other.whiteScythes), scytheCombo(other.scytheCombo),
-   manualScytheTrigger(other.manualScytheTrigger), scytheRandomMode(other.scytheRandomMode),
+   scytheComboPlayer(other.scytheComboPlayer), manualScytheTrigger(other.manualScytheTrigger),
+   manualScytheTriggerPlayer(other.manualScytheTriggerPlayer), scytheRandomMode(other.scytheRandomMode),
    scytheRandomTriggers(other.scytheRandomTriggers)
 {
   std::copy(other.recentBoards, other.recentBoards+NUM_RECENT_BOARDS, recentBoards);
@@ -195,7 +202,9 @@ BoardHistory& BoardHistory::operator=(const BoardHistory& other)
   blackScythes = other.blackScythes;
   whiteScythes = other.whiteScythes;
   scytheCombo = other.scytheCombo;
+  scytheComboPlayer = other.scytheComboPlayer;
   manualScytheTrigger = other.manualScytheTrigger;
+  manualScytheTriggerPlayer = other.manualScytheTriggerPlayer;
   scytheRandomMode = other.scytheRandomMode;
   scytheRandomTriggers = other.scytheRandomTriggers;
 
@@ -234,7 +243,8 @@ BoardHistory::BoardHistory(BoardHistory&& other) noexcept
   isGameFinished(other.isGameFinished),winner(other.winner),finalWhiteMinusBlackScore(other.finalWhiteMinusBlackScore),
   isScored(other.isScored),isNoResult(other.isNoResult),isResignation(other.isResignation),
   blackScythes(other.blackScythes), whiteScythes(other.whiteScythes), scytheCombo(other.scytheCombo),
-  manualScytheTrigger(other.manualScytheTrigger), scytheRandomMode(other.scytheRandomMode),
+  scytheComboPlayer(other.scytheComboPlayer), manualScytheTrigger(other.manualScytheTrigger),
+  manualScytheTriggerPlayer(other.manualScytheTriggerPlayer), scytheRandomMode(other.scytheRandomMode),
   scytheRandomTriggers(std::move(other.scytheRandomTriggers))
 {
   std::copy(other.recentBoards, other.recentBoards+NUM_RECENT_BOARDS, recentBoards);
@@ -287,7 +297,9 @@ BoardHistory& BoardHistory::operator=(BoardHistory&& other) noexcept
   blackScythes = other.blackScythes;
   whiteScythes = other.whiteScythes;
   scytheCombo = other.scytheCombo;
+  scytheComboPlayer = other.scytheComboPlayer;
   manualScytheTrigger = other.manualScytheTrigger;
+  manualScytheTriggerPlayer = other.manualScytheTriggerPlayer;
   scytheRandomMode = other.scytheRandomMode;
   scytheRandomTriggers = other.scytheRandomTriggers;
 
@@ -353,15 +365,17 @@ void BoardHistory::clear(const Board& board, Player pla, const Rules& r, int ePh
     blackScythes = 3;
     whiteScythes = 3;
     scytheCombo = 0;
+    scytheComboPlayer = C_EMPTY;
     manualScytheTrigger = false;
+    manualScytheTriggerPlayer = C_EMPTY;
 
     // Initialize random scythe triggers for training mode
     scytheRandomTriggers.clear();
     if(scytheRandomMode && board.x_size == 11 && board.y_size == 11) {
-      // Generate 6 random move numbers between 11-49 (3 for black, 3 for white)
-      // Black plays on odd moves (11, 13, 15...), White on even moves (12, 14, 16...)
+      // Generate 6 random move numbers in scythe range (3 for black, 3 for white)
+      // Black plays on odd moves, White on even moves
       std::vector<int> blackMoves, whiteMoves;
-      for(int i = 11; i <= 49; i++) {
+      for(int i = scytheMinMove; i <= scytheMaxMove; i++) {
         if(i % 2 == 1) blackMoves.push_back(i);  // Odd = Black's turn
         else whiteMoves.push_back(i);             // Even = White's turn
       }
@@ -838,13 +852,16 @@ void BoardHistory::setKoRecapBlocked(Loc loc, bool b) {
 }
 
 bool BoardHistory::isLegal(const Board& board, Loc moveLoc, Player movePla) const {
-  // Scythe rule: Only check player alternation for 11x11 boards during normal play
-  // Don't apply this check during encore phase (different player switching rules)
-  if(board.x_size == 11 && board.y_size == 11 && encorePhase == 0) {
-    // Allow same player to continue during scythe combo
-    if(movePla != presumedNextMovePla && scytheCombo == 0)
-      return false;
-  }
+  // SCYTHE FIX: Removed strict player alternation check for 11x11 boards
+  // The previous check (movePla != presumedNextMovePla && scytheCombo == 0) was causing
+  // analysis mode to fail because it blocked any move by a player other than presumedNextMovePla.
+  //
+  // Player switching is correctly handled by:
+  // 1. makeBoardMoveAssumeLegal() which updates presumedNextMovePla based on scytheCombo
+  // 2. Search tree which uses rootPla for analysis
+  //
+  // This allows analysis of either player's moves in analysis mode while still
+  // maintaining correct scythe combo behavior during actual play.
 
   //Ko-moves in the encore that are recapture blocked are interpreted as pass-for-ko, so they are legal
   if(encorePhase > 0) {
@@ -884,6 +901,40 @@ bool BoardHistory::isPassForKo(const Board& board, Loc moveLoc, Player movePla) 
 
 int64_t BoardHistory::getCurrentTurnNumber() const {
   return std::max((int64_t)0,initialTurnNumber + (int64_t)moveHistory.size());
+}
+
+// --- Scythe Methods ---
+bool BoardHistory::canUseScythe(Player pla) const {
+  // Condition 1: Must be 11x11 board
+  if(initialBoard.x_size != 11 || initialBoard.y_size != 11) {
+    return false;
+  }
+
+  // Condition 2: Move number must be in scythe range
+  int64_t moveNum = getCurrentTurnNumber();
+  if(moveNum < scytheMinMove || moveNum > scytheMaxMove) {
+    return false;
+  }
+
+  // Condition 3: Cannot use if already in a combo
+  if(scytheCombo > 0) {
+    return false;
+  }
+
+  // Condition 4: Player must have scythes remaining
+  int scythesLeft = (pla == P_BLACK) ? blackScythes : whiteScythes;
+  if(scythesLeft <= 0) {
+    return false;
+  }
+
+  return true;
+}
+
+bool BoardHistory::shouldAddScytheOption(Player pla) const {
+  // For now, this is equivalent to canUseScythe()
+  // In the future, this may have additional conditions for the search tree
+  // (e.g., only add if the position is "interesting" for scythe evaluation)
+  return canUseScythe(pla);
 }
 
 //Return the number of consecutive game-ending passes there would be if a pass was made
@@ -1119,9 +1170,31 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
   // 1. scytheCombo countdown (for continuous moves)
   // 2. presumedNextMovePla setting (for engine to know whose turn it is)
   // 3. Training mode random triggers (scytheRandomMode)
-  // Note: Manual triggers are handled in GTP layer (gtp.cpp)
+  // 4. Manual triggers (manualScytheTrigger from GUI)
 
   bool isScytheActive = false;
+
+  // Check for manual trigger FIRST (from GUI kata-set-param scythe_trigger true)
+  // This happens when scytheCombo == 0 and manualScytheTrigger is set
+  if(board.x_size == 11 && board.y_size == 11 && scytheCombo == 0 && manualScytheTrigger) {
+    // Use GUI-specified player if set, otherwise fall back to movePla
+    Player triggerPla = (manualScytheTriggerPlayer != C_EMPTY) ? manualScytheTriggerPlayer : movePla;
+    std::cerr << "[SCYTHE-DEBUG] Manual trigger, movePla=" << PlayerIO::playerToString(movePla)
+              << ", triggerPla=" << PlayerIO::playerToString(triggerPla) << std::endl;
+    // Check if player has scythes left
+    int scythesLeft = (triggerPla == P_BLACK) ? blackScythes : whiteScythes;
+    if(scythesLeft > 0) {
+      // Trigger scythe: decrement count and set combo
+      if(triggerPla == P_BLACK) blackScythes--;
+      else whiteScythes--;
+      scytheCombo = 3;  // 3 consecutive moves (will be decremented to 2 below, then 2 more moves)
+      scytheComboPlayer = triggerPla;  // Record which player is using the combo
+      std::cerr << "[SCYTHE-DEBUG] Scythe triggered! scytheCombo=3, scytheComboPlayer="
+                << PlayerIO::playerToString(scytheComboPlayer) << std::endl;
+    }
+    manualScytheTrigger = false;  // Clear the trigger after consuming
+    manualScytheTriggerPlayer = C_EMPTY;  // Reset player specification
+  }
 
   // Check for training mode random trigger BEFORE combo processing
   // This happens when scytheCombo == 0 (not in a combo) and scytheRandomMode is enabled
@@ -1137,7 +1210,8 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
           // Trigger scythe: decrement count and set combo
           if(movePla == P_BLACK) blackScythes--;
           else whiteScythes--;
-          scytheCombo = 3;  // Will be decremented below to 2
+          scytheCombo = 3;  // 3 consecutive moves (will be decremented to 2 below, then 2 more moves)
+          scytheComboPlayer = movePla;  // Record which player is using the combo
         }
         break;
       }
@@ -1147,16 +1221,28 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
   // Handle scytheCombo countdown
   if(board.x_size == 11 && board.y_size == 11 && scytheCombo > 0) {
     scytheCombo--;
+    std::cerr << "[SCYTHE-DEBUG] After combo--, scytheCombo=" << scytheCombo
+              << ", movePla=" << PlayerIO::playerToString(movePla)
+              << ", scytheComboPlayer=" << PlayerIO::playerToString(scytheComboPlayer) << std::endl;
     if(scytheCombo > 0) {
-      // Still in combo - same player continues
+      // Still in combo - same player continues (use scytheComboPlayer, not movePla!)
       isScytheActive = true;
-      presumedNextMovePla = movePla;
+      presumedNextMovePla = scytheComboPlayer;
+      std::cerr << "[SCYTHE-DEBUG] Combo active, presumedNextMovePla="
+                << PlayerIO::playerToString(presumedNextMovePla) << std::endl;
+    }
+    else {
+      // Combo ended - reset combo player and switch to opponent
+      scytheComboPlayer = C_EMPTY;
+      std::cerr << "[SCYTHE-DEBUG] Combo ended" << std::endl;
     }
     // If scytheCombo became 0, combo ended - normal turn switch
   }
 
   if(!isScytheActive) {
     presumedNextMovePla = getOpp(movePla);
+    std::cerr << "[SCYTHE-DEBUG] Not scythe active, presumedNextMovePla="
+              << PlayerIO::playerToString(presumedNextMovePla) << std::endl;
   }
   // --- Scythe Logic End ---
 

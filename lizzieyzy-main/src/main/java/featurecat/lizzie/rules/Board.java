@@ -10,6 +10,7 @@ import featurecat.lizzie.analysis.Leelaz;
 import featurecat.lizzie.analysis.MoveData;
 import featurecat.lizzie.gui.LizzieFrame;
 import featurecat.lizzie.gui.ScoreResult;
+import featurecat.lizzie.util.DebugLogger;
 import featurecat.lizzie.util.Utils;
 import java.io.File;
 import java.io.IOException;
@@ -115,7 +116,7 @@ public class Board {
               300,
               e -> {
                 if (LizzieFrame.scythePanel != null) {
-                  LizzieFrame.scythePanel.refreshScytheStatus();
+                  LizzieFrame.scythePanel.refreshDisplay();
                 }
               });
       refreshTimer.setRepeats(false);
@@ -1613,6 +1614,9 @@ public class Board {
   public void placeForSync(int x, int y, Stone color, boolean newBranch) {
     place(x, y, color, newBranch, true, false);
     Lizzie.frame.readBoard.lastMovePlayByLizzie = false;
+
+    // 注意：decrementGuiCombo 已在 place() 中调用，不要在这里重复递减
+    // 否则每次对手镰刀落子会减2次，导致AI提前尝试落子
   }
 
   public void placeForManual(int x, int y) {
@@ -1853,12 +1857,32 @@ public class Board {
           && !EngineManager.isEngineGame) {
         Lizzie.leelaz.playMove(color, convertCoordinatesToName(x, y), true, color.isWhite());
       }
-      if (!forSync
-          && Lizzie.frame.bothSync
-          && Lizzie.frame.readBoard != null
-          && Lizzie.frame.readBoard.process != null
-          && Lizzie.frame.readBoard.process.isAlive()) {
+
+      // 诊断日志：检查 readboard 发送条件
+      boolean readBoardNotNull = Lizzie.frame.readBoard != null;
+      boolean readBoardReady = readBoardNotNull && Lizzie.frame.readBoard.isReady();
+      boolean canSendToReadboard = !forSync && Lizzie.frame.bothSync && readBoardReady;
+      DebugLogger.logSendPlace(
+          "forSync="
+              + forSync
+              + ", bothSync="
+              + Lizzie.frame.bothSync
+              + ", readBoard="
+              + readBoardNotNull
+              + ", ready="
+              + readBoardReady
+              + ", canSend="
+              + canSendToReadboard
+              + ", coord=("
+              + x
+              + ","
+              + y
+              + ")");
+      if (canSendToReadboard) {
+        DebugLogger.logSendPlace("Sending 'place " + x + " " + y + "' to readboard");
         Lizzie.frame.readBoard.sendCommand("place " + x + " " + y);
+      } else {
+        DebugLogger.logSendPlace("NOT sending place command due to condition failure");
       }
 
       // 落子前检查是否有待触发的镰刀
@@ -1873,8 +1897,12 @@ public class Board {
       if (LizzieFrame.scythePanel != null
           && LizzieFrame.scythePanel.isGuiComboActive()
           && !isLoadingFile) {
+        // int beforeDecrement = LizzieFrame.scythePanel.getGuiComboRemaining();
         // 先递减连击计数
         LizzieFrame.scythePanel.decrementGuiCombo();
+        // int afterDecrement = LizzieFrame.scythePanel.getGuiComboRemaining();
+        // System.err.println("Board.place: 镰刀落子 [" + color + "], 递减前=" + beforeDecrement + ", 递减后="
+        // + afterDecrement);
 
         // 只有在连击还没结束时，才保持同一玩家
         if (LizzieFrame.scythePanel.isGuiComboActive()) {
@@ -1882,15 +1910,27 @@ public class Board {
           // 设置下一手仍然是同一方
           history.getData().blackToPlay = comboPlayer;
         } else {
-          // 连击结束，刷新镰刀状态以获取真实的镰刀数量
-          LizzieFrame.scythePanel.refreshScytheStatus();
+          // 连击结束，只刷新显示，不发送 GTP 命令（避免中断分析）
+          LizzieFrame.scythePanel.refreshDisplay();
         }
         // 如果连击已结束（guiComboRemaining==0），不设置blackToPlay
         // 让addOrGoto()的自动切换生效，下一手切换到对方
       }
 
       updateIsBest();
-      if (needGenmove) Lizzie.leelaz.genmove((color.isWhite() ? "B" : "W"));
+      if (needGenmove) {
+        // 镰刀连击中：继续用同一颜色计算；否则切换到对方
+        String nextColor;
+        if (LizzieFrame.scythePanel != null && LizzieFrame.scythePanel.isGuiComboActive()) {
+          // 连击中，继续用同一颜色（连击玩家）
+          nextColor = LizzieFrame.scythePanel.getGuiComboPlayer() ? "B" : "W";
+          // System.err.println("Board.place: 镰刀连击中，genmove 颜色=" + nextColor);
+        } else {
+          // 正常模式，切换到对方
+          nextColor = color.isWhite() ? "B" : "W";
+        }
+        Lizzie.leelaz.genmove(nextColor);
+      }
       //   modifyEnd(false);
       // if (Lizzie.config.playSound) Utils.playVoiceFile();  // 禁用声音，避免弹窗
       if (!forSync) Lizzie.frame.refresh();
@@ -2293,12 +2333,13 @@ public class Board {
     if (isLoadingFile) return;
 
     // 刷新镰刀状态面板 (落子后自动更新)
-    // 优化：只在镰刀可用时间段（第11-49手）才查询，减少不必要的GTP命令
+    // FIX: 不再查询引擎状态，避免干扰分析（cmdNumber 不匹配导致 info 被丢弃）
+    // 镰刀状态固定：黑3次，白3次，手数范围 11-49
     if (LizzieFrame.scythePanel != null) {
       int moveNum = getHistory().getMoveNumber();
-      // 只在镰刀可用时间段查询，或者在连击中时必须查询
+      // 只刷新显示，不发送 GTP 命令
       if ((moveNum >= 11 && moveNum <= 49) || LizzieFrame.scythePanel.isComboActive()) {
-        LizzieFrame.scythePanel.refreshScytheStatus();
+        LizzieFrame.scythePanel.refreshDisplay();
       }
     }
 
@@ -2319,8 +2360,19 @@ public class Board {
       Lizzie.frame.currentRow = -1;
     }
     if (LizzieFrame.toolbar.chkAutoSub.isSelected()) {
-      LizzieFrame.toolbar.displayedSubBoardBranchLength = 1;
-      LizzieFrame.subBoardRenderer.setDisplayedBranchLength(1);
+      // 镰刀连击期间，显示足够长度的变化图
+      int branchLength = 1;
+      if (LizzieFrame.scythePanel != null) {
+        if (LizzieFrame.scythePanel.isGuiComboActive()) {
+          // 已激活：显示剩余连击数
+          branchLength = Math.max(3, LizzieFrame.scythePanel.getGuiComboRemaining());
+        } else if (LizzieFrame.scythePanel.isScythePending()) {
+          // 待触发：显示完整 3 步
+          branchLength = 3;
+        }
+      }
+      LizzieFrame.toolbar.displayedSubBoardBranchLength = branchLength;
+      LizzieFrame.subBoardRenderer.setDisplayedBranchLength(branchLength);
       LizzieFrame.subBoardRenderer.wheeled = false;
     } else {
       LizzieFrame.subBoardRenderer.clearAfterMove();
@@ -2372,7 +2424,16 @@ public class Board {
       Lizzie.frame.independentSubBoard.subBoardRenderer.clearAfterMove();
 
       if (LizzieFrame.toolbar.chkAutoSub.isSelected()) {
-        Lizzie.frame.independentSubBoard.subBoardRenderer.setDisplayedBranchLength(1);
+        // 镰刀连击期间，显示足够长度的变化图
+        int branchLength = 1;
+        if (LizzieFrame.scythePanel != null) {
+          if (LizzieFrame.scythePanel.isGuiComboActive()) {
+            branchLength = Math.max(3, LizzieFrame.scythePanel.getGuiComboRemaining());
+          } else if (LizzieFrame.scythePanel.isScythePending()) {
+            branchLength = 3;
+          }
+        }
+        Lizzie.frame.independentSubBoard.subBoardRenderer.setDisplayedBranchLength(branchLength);
         Lizzie.frame.independentSubBoard.subBoardRenderer.wheeled = false;
       } else {
         Lizzie.frame.independentSubBoard.subBoardRenderer.clearAfterMove();
@@ -2385,6 +2446,8 @@ public class Board {
     }
     handleCandidatesDelay();
     Lizzie.frame.doCommentAfterMove();
+    // 注意：镰刀状态查询后的 ponder() 重启已移至 Leelaz.java 的 JSON 响应处理中
+    // 收到 kata-get-scythe-status 的响应后会自动重启分析
   }
 
   public void handleCandidatesDelay() {

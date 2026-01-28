@@ -64,7 +64,7 @@ namespace readboard
         static double widthMagrin = 0;
         static double heightMagrin = 0;
         //Boolean noticeLast = true;
-        Boolean syncBoth = false;
+        Boolean syncBoth = true;  // 镰刀版默认启用双向同步
         Boolean canUseLW = false;
         //Boolean noLw = false;
         Boolean useTcp = false;
@@ -93,6 +93,29 @@ namespace readboard
         Boolean isSecondTime = false;
 
         Boolean needForceUnbind = false;
+
+        // 日志系统 - 用于调试自动落子功能
+        private bool debugLogging = true;  // 启用日志追踪落子流程
+        private string logFilePath = null;
+
+        private void LogDebug(string message)
+        {
+            if (!debugLogging) return;
+            try
+            {
+                if (logFilePath == null)
+                {
+                    logFilePath = Path.Combine(
+                        Path.GetDirectoryName(Application.ExecutablePath),
+                        "readboard_debug.log"
+                    );
+                }
+                string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                File.AppendAllText(logFilePath, $"[{timestamp}] {message}\r\n");
+            }
+            catch { /* 静默失败 */ }
+        }
+
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         static extern bool GetWindowRect(IntPtr hWnd, ref RECT lpRect);
@@ -288,7 +311,7 @@ namespace readboard
 
         private void Send(String strMsg)
         {
-            //Console.OutputEncoding = Encoding.UTF8;
+            LogDebug($"[SEND] 发送到 lizzieyzy: {strMsg}");
             if (useTcp)
             {
                 try
@@ -339,7 +362,7 @@ namespace readboard
                         if (numBytesRead > 0)
                         {
                             readStr = Encoding.UTF8.GetString(data, 0, numBytesRead);
-                            //Console.Error.WriteLine(readStr);
+                            LogDebug($"[TCP-RECV] 收到原始数据: {readStr.Trim()}");
                         }
                         readPlace(readStr);
                     }
@@ -361,10 +384,8 @@ namespace readboard
                 char[] separator = { ' ' }; string[] arr = a.Split(separator);
                 try
                 {
-                    // [调试] 显示收到的落子命令
-                    System.Diagnostics.Debug.WriteLine("[DEBUG] 收到落子命令: " + a);
-                    MessageBox.Show("收到落子命令: " + a + "\n坐标: (" + arr[1] + ", " + arr[2] + ")", "调试-收到place");
-
+                    // 记录收到的落子命令
+                    LogDebug($"收到落子命令: {a} - 坐标: ({arr[1]}, {arr[2]})");
                     placeMove(int.Parse(arr[1]), int.Parse(arr[2]));
                 }
                 catch (Exception e)
@@ -1507,11 +1528,13 @@ namespace readboard
             {
                 if (radioBlack.Checked)
                 {
-                    Send("play>black>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
+                    string cmd = chkAutoPlay.Checked ? "playauto" : "play";  // 修复：自动落子时发送 playauto
+                    Send(cmd + ">black>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
                 }
                 else if (radioWhite.Checked)
                 {
-                    Send("play>white>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
+                    string cmd = chkAutoPlay.Checked ? "playauto" : "play";  // 修复：自动落子时发送 playauto
+                    Send(cmd + ">white>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
                 }
             }
             if (!isContinuousSyncing && Program.autoMin && isRightGoban && this.WindowState != FormWindowState.Minimized)
@@ -2453,34 +2476,27 @@ namespace readboard
 
         public void placeMove(int x, int y)
         {
-            // [调试] 显示所有条件的状态
-            string debugInfo = string.Format(
-                "placeMove 条件检查:\n" +
-                "keepSync = {0} (需要 true)\n" +
-                "syncBoth = {1} (需要 true)\n" +
-                "width = {2}, boardW = {3} (需要 width >= boardW)\n" +
-                "type = {4}, canUseLW = {5}",
-                keepSync, syncBoth, width, boardW, type, canUseLW);
-            MessageBox.Show(debugInfo, "调试-placeMove条件");
+            // 记录条件状态（用于调试）
+            LogDebug($"placeMove({x},{y}) - keepSync:{keepSync}, syncBoth:{syncBoth}, width:{width}, boardW:{boardW}, type:{type}, canUseLW:{canUseLW}");
 
             if (!keepSync || !syncBoth || width < boardW)
             {
-                MessageBox.Show("条件不满足，落子被跳过！\n" + debugInfo, "调试-落子失败");
+                LogDebug($"placeMove 条件不满足，落子被跳过 - keepSync:{keepSync}, syncBoth:{syncBoth}, width:{width}, boardW:{boardW}");
                 return;
             }
-            MessageBox.Show("条件通过！准备落子到 (" + x + ", " + y + ")", "调试-开始落子");
+            LogDebug($"placeMove 条件通过，准备落子到 ({x}, {y})");
 
             int times = 10;
             if ((type == 0) && canUseLW)
             {
-                MessageBox.Show("使用 LW 模式（后台落子）", "调试-落子模式");
+                LogDebug("使用 LW 模式（后台落子）");
                 savedPlace = true;
                 savedX = x;
                 savedY = y;
             }
             else
             {
-                MessageBox.Show("使用前台模式（模拟点击）\ntype=" + type + ", canUseLW=" + canUseLW, "调试-落子模式");
+                LogDebug($"使用前台模式（模拟点击）- type:{type}, canUseLW:{canUseLW}");
                 do
                 {
                     placeStone(x, y);
@@ -2489,7 +2505,7 @@ namespace readboard
                         break;
                 } while (Program.verifyMove && !VerifyMove(x, y, false));
             }
-            MessageBox.Show("落子完成！发送 placeComplete", "调试-落子结束");
+            LogDebug("落子完成，发送 placeComplete");
             Send("placeComplete");
         }
 
@@ -2631,11 +2647,13 @@ namespace readboard
                 Send("sync");
                 if (radioBlack.Checked)
                 {
-                    Send("play>black>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
+                    string cmd = chkAutoPlay.Checked ? "playauto" : "play";  // 修复：自动落子时发送 playauto
+                    Send(cmd + ">black>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
                 }
                 else if (radioWhite.Checked)
                 {
-                    Send("play>white>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
+                    string cmd = chkAutoPlay.Checked ? "playauto" : "play";  // 修复：自动落子时发送 playauto
+                    Send(cmd + ">white>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
                 }
             }
             this.saveOtherConfig();
@@ -2781,12 +2799,14 @@ namespace readboard
             if (keepSync)
                 if (radioBlack.Checked)
                 {
-                    Send("play>black>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
+                    string cmd = chkAutoPlay.Checked ? "playauto" : "play";  // 修复：自动落子时发送 playauto
+                    Send(cmd + ">black>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
                 }
                 else if (radioWhite.Checked)
                 {
-                    Send("play>white>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
-                }           
+                    string cmd = chkAutoPlay.Checked ? "playauto" : "play";  // 修复：自动落子时发送 playauto
+                    Send(cmd + ">white>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
+                }
         }
 
         private void radioWhite_CheckedChanged(object sender, EventArgs e)
@@ -2796,11 +2816,13 @@ namespace readboard
             if (keepSync)
                 if (radioBlack.Checked)
                 {
-                    Send("play>black>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
+                    string cmd = chkAutoPlay.Checked ? "playauto" : "play";  // 修复：自动落子时发送 playauto
+                    Send(cmd + ">black>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
                 }
                 else if (radioWhite.Checked)
                 {
-                    Send("play>white>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
+                    string cmd = chkAutoPlay.Checked ? "playauto" : "play";  // 修复：自动落子时发送 playauto
+                    Send(cmd + ">white>" + (textBox1.Text.Equals("") ? "0" : textBox1.Text) + " " + (textBox2.Text.Equals("") ? "0" : textBox2.Text) + " " + (textBox3.Text.Equals("") ? "0" : textBox3.Text));
                 }
         }
 

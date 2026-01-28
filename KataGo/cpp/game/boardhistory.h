@@ -105,9 +105,14 @@ struct BoardHistory {
   int blackScythes;      // Number of scythes remaining for Black (starts at 3)
   int whiteScythes;      // Number of scythes remaining for White (starts at 3)
   int scytheCombo;       // Moves remaining in current scythe combo
+  Player scytheComboPlayer; // Which player is using scythe combo (C_EMPTY if no combo active)
   bool manualScytheTrigger; // TRUE = next move will trigger scythe chain
+  Player manualScytheTriggerPlayer; // Which player should trigger (set by GUI)
   bool scytheRandomMode;    // TRUE = use random triggers for training
   std::vector<int> scytheRandomTriggers; // Pre-determined random trigger move numbers
+  // Scythe move range (configurable for different platforms)
+  static int scytheMinMove;  // Minimum move number to use scythe (default: 15 for Yahu)
+  static int scytheMaxMove;  // Maximum move number to use scythe (default: 54 for Yahu)
   // ------------------------------
 
   BoardHistory();
@@ -162,6 +167,16 @@ struct BoardHistory {
 
   //Current turn number, based on initial turn number
   int64_t getCurrentTurnNumber() const;
+
+  // --- Scythe Methods ---
+  // Check if specified player can use scythe now (all conditions met)
+  // Conditions: 11x11 board, move 11-49, scytheCombo==0, player has scythes left
+  bool canUseScythe(Player pla) const;
+
+  // Check if search tree should add a scythe option for the specified player
+  // This is used by the search tree to decide whether to add a "SCYTHE" virtual child node
+  // Currently delegates to canUseScythe() but may have additional logic in the future
+  bool shouldAddScytheOption(Player pla) const;
 
   //For all of the below, rootKoHashTable is optional and if provided will slightly speedup superko searches
   //This function should behave gracefully so long as it is pseudolegal (board.isLegal, but also still ok if the move is on board.ko_loc)

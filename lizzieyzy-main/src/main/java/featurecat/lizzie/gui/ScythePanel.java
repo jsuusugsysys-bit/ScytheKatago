@@ -24,6 +24,8 @@ public class ScythePanel extends JPanel {
   private boolean guiComboPlayer = true; // 连击的玩家（true=黑棋，false=白棋）
   private boolean scythePending = false; // 镰刀待触发标志（点击后等待落子）
   private boolean scythePendingPlayer = true; // 待触发镰刀的玩家
+  private boolean isAiScythe = false; // 是否是 AI 方的镰刀（用于连击处理）
+  private boolean guiComboAuthority = false; // GUI 连击状态优先标志（防止引擎覆盖）
 
   // UI 组件
   private JLabel blackLabel;
@@ -143,12 +145,13 @@ public class ScythePanel extends JPanel {
               }
             });
 
-    // 延迟初始化查询（等待引擎启动）
+    // 延迟初始化显示（等待引擎启动）
+    // 注意：不发送 GTP 查询，避免干扰分析
     Timer initTimer =
         new Timer(
             500,
             e -> {
-              refreshScytheStatus();
+              refreshDisplay();
             });
     initTimer.setRepeats(false);
     initTimer.start();
@@ -157,40 +160,58 @@ public class ScythePanel extends JPanel {
   private int flashCount = 0;
 
   /**
-   * 触发镰刀
+   * 触发镰刀（手动点击时调用，自动判断是否是 AI 方）
    *
    * @param color "black" 或 "white"
    */
   public void triggerScythe(String color) {
-    System.err.println("DEBUG: triggerScythe called, color=" + color);
+    // 手动点击镰刀图标，无论是否在自动对弈模式，都标记为 AI 镰刀
+    // 这样可以在分析模式下也能触发 AI 连续计算 3 手
+    boolean isAi = true; // 手动点击 = 要求 AI 连续计算
+    triggerScythe(color, isAi);
+  }
+
+  /**
+   * 触发镰刀（带 AI 标志，供 ScytheDetector 调用）
+   *
+   * @param color "black" 或 "white"
+   * @param isAi 是否是 AI 方的镰刀
+   */
+  public void triggerScythe(String color, boolean isAi) {
+    // System.err.println("DEBUG: triggerScythe called, color=" + color + ", isAi=" + isAi);
 
     if (Lizzie.leelaz == null) {
-      System.err.println("DEBUG: Lizzie.leelaz is null");
+      // System.err.println("DEBUG: Lizzie.leelaz is null");
       return;
     }
 
     if (!Lizzie.leelaz.isKatago) {
-      System.err.println("DEBUG: Not KataGo engine");
+      // System.err.println("DEBUG: Not KataGo engine");
       return;
     }
 
     // 检查是否有剩余镰刀
     if (color.equals("black") && blackScythes <= 0) {
-      System.err.println("DEBUG: No black scythes remaining");
+      // System.err.println("DEBUG: No black scythes remaining");
       return;
     }
     if (color.equals("white") && whiteScythes <= 0) {
-      System.err.println("DEBUG: No white scythes remaining");
+      // System.err.println("DEBUG: No white scythes remaining");
       return;
     }
 
-    System.err.println("DEBUG: Triggering scythe for " + color);
+    // System.err.println("DEBUG: Triggering scythe for " + color + " (isAi=" + isAi + ")");
+
+    // 设置 AI 方标志
+    this.isAiScythe = isAi;
 
     // 设置待触发标志（等待落子时真正触发）
     scythePending = true;
     scythePendingPlayer = color.equals("black");
 
-    // 发送触发命令
+    // 发送触发命令（明确指定玩家颜色）
+    String playerParam = color.equals("black") ? "black" : "white";
+    Lizzie.leelaz.sendCommand("kata-set-param scythe_trigger_player " + playerParam);
     Lizzie.leelaz.sendCommand("kata-set-param scythe_trigger true");
 
     // 立即显示数字减少（乐观更新）
@@ -200,20 +221,61 @@ public class ScythePanel extends JPanel {
     // 激活连击状态并开始持续闪烁
     guiComboRemaining = 3;
     guiComboPlayer = color.equals("black");
+    guiComboAuthority = true; // 标记 GUI 状态优先，防止引擎覆盖
     updateComboDisplay();
     startPersistentFlash(playerCode);
+
+    // 主动触发 AI 分析（分析模式下显示推荐点）
+    if (Lizzie.leelaz != null) {
+      // System.err.println("DEBUG: 镰刀触发，主动调用 ponder() 开始分析（连续3手）");
+      // 使用 ponder() 触发 kata-analyze，这样会显示推荐点
+      // KataGo 引擎会根据 scytheCombo 状态，计算同一玩家连续 3 手的变化
+      Lizzie.leelaz.ponder();
+    }
   }
 
-  /** 从引擎获取镰刀状态 */
+  /**
+   * 刷新显示（不查询引擎，避免干扰分析）
+   *
+   * <p>镰刀状态固定：黑3次、白3次、手数范围11-49
+   */
+  public void refreshDisplay() {
+    // 不发送 GTP 命令，直接更新显示
+    // 镰刀数量固定（目前版本不会扣减）
+    SwingUtilities.invokeLater(this::repaint);
+  }
+
+  /** 从引擎获取镰刀状态（已弃用，会干扰分析） */
+  @Deprecated
   public void refreshScytheStatus() {
     if (Lizzie.leelaz == null || !Lizzie.leelaz.isKatago) {
       return;
     }
 
     try {
+      // 设置标志，表示正在等待镰刀状态响应
+      Lizzie.leelaz.scytheQueryPending = true;
       Lizzie.leelaz.sendCommand("kata-get-scythe-status");
+
+      // 超时保护：2秒后如果还没收到响应，自动重置红灯并重启分析
+      new Thread(
+              () -> {
+                try {
+                  Thread.sleep(2000); // 等待 2 秒
+                } catch (InterruptedException e) {
+                }
+                if (Lizzie.leelaz.scytheQueryPending) {
+                  System.err.println(
+                      "WARNING: Scythe query timeout after 2s, forcing green light and ponder");
+                  Lizzie.leelaz.scytheQueryPending = false;
+                  if (Lizzie.leelaz == Lizzie.leelaz && !Lizzie.leelaz.isPondering()) {
+                    Lizzie.leelaz.ponder();
+                  }
+                }
+              })
+          .start();
     } catch (Exception e) {
-      // 忽略错误
+      Lizzie.leelaz.scytheQueryPending = false;
     }
   }
 
@@ -247,17 +309,44 @@ public class ScythePanel extends JPanel {
 
       // 同步 GUI 连击状态
       if (newIsComboActive && newScytheCombo > 0) {
-        guiComboRemaining = newScytheCombo;
-        guiComboPlayer = newNextPlayer.equals("B");
-        updateComboDisplay();
-        if (!persistentFlash) {
-          startPersistentFlash(newNextPlayer);
+        // 引擎确认连击激活
+        if (guiComboRemaining == 0) {
+          // 场景 1: GUI 未知连击，引擎报告连击 → 从引擎同步
+          guiComboRemaining = newScytheCombo;
+          guiComboPlayer = newNextPlayer.equals("B");
+          guiComboAuthority = false; // 引擎状态优先
+          updateComboDisplay();
+          if (!persistentFlash) {
+            startPersistentFlash(newNextPlayer);
+          }
+        } else if (guiComboAuthority) {
+          // 场景 2: GUI 已触发连击 → 保持 GUI 值，忽略引擎（可能是延迟响应）
+          System.err.println(
+              "ScythePanel: GUI 连击状态优先，忽略引擎更新 (gui="
+                  + guiComboRemaining
+                  + ", engine="
+                  + newScytheCombo
+                  + ")");
+          // 不更新 guiComboRemaining
+        } else {
+          // 场景 3: 引擎驱动的连击（正常递减同步）
+          guiComboRemaining = newScytheCombo;
+          guiComboPlayer = newNextPlayer.equals("B");
+          updateComboDisplay();
         }
       } else if (!newIsComboActive && guiComboRemaining > 0) {
-        // 连击结束
-        guiComboRemaining = 0;
-        updateComboDisplay();
-        stopFlash();
+        // 引擎报告连击结束，但 GUI 仍在连击中
+        if (guiComboAuthority) {
+          // 场景 4: GUI 刚触发镰刀，引擎还没落子 → 保持 GUI 状态
+          System.err.println(
+              "ScythePanel: GUI 连击刚触发，忽略引擎'未激活'状态 (guiRemaining=" + guiComboRemaining + ")");
+          // 不重置 guiComboRemaining
+        } else {
+          // 场景 5: 引擎确认连击结束 → 清除 GUI 状态
+          guiComboRemaining = 0;
+          updateComboDisplay();
+          stopFlash();
+        }
       }
 
       repaint();
@@ -370,7 +459,8 @@ public class ScythePanel extends JPanel {
 
     count = Math.max(0, Math.min(3, count));
     Lizzie.leelaz.sendCommand("kata-set-scythe-count " + color + " " + count);
-    refreshScytheStatus();
+    // 不发送状态查询，避免中断分析
+    refreshDisplay();
   }
 
   /** 重置镰刀次数 */
@@ -380,7 +470,8 @@ public class ScythePanel extends JPanel {
     }
 
     Lizzie.leelaz.sendCommand("scythe_reset");
-    refreshScytheStatus();
+    // 不发送状态查询，避免中断分析
+    refreshDisplay();
   }
 
   /** 重置显示到初始状态 (3/3) */
@@ -390,6 +481,7 @@ public class ScythePanel extends JPanel {
     scytheCombo = 0;
     isComboActive = false;
     guiComboRemaining = 0;
+    guiComboAuthority = false;
     scythePending = false;
     blackCountLabel.setText("3");
     whiteCountLabel.setText("3");
@@ -475,11 +567,48 @@ public class ScythePanel extends JPanel {
     return guiComboPlayer;
   }
 
+  /**
+   * 检查当前镰刀是否是 AI 方的
+   *
+   * @return true=AI 方镰刀，false=对手方镰刀
+   */
+  public boolean isAiScythe() {
+    return isAiScythe;
+  }
+
+  /**
+   * 获取剩余连击次数
+   *
+   * @return 剩余连击次数（0-3）
+   */
+  public int getGuiComboRemaining() {
+    return guiComboRemaining;
+  }
+
+  /**
+   * 检查是否有待触发的镰刀（用户已点击图标但还没落子）
+   *
+   * @return true 如果有待触发的镰刀
+   */
+  public boolean isScythePending() {
+    return scythePending;
+  }
+
+  /**
+   * 获取待触发镰刀的玩家
+   *
+   * @return true=黑棋，false=白棋
+   */
+  public boolean getScythePendingPlayer() {
+    return scythePendingPlayer;
+  }
+
   /** 落子前调用，检查是否有待触发的镰刀 */
   public void onBeforeMove() {
     if (scythePending) {
       guiComboRemaining = 3;
       guiComboPlayer = scythePendingPlayer;
+      guiComboAuthority = true; // 待触发镰刀激活时，GUI 优先
       scythePending = false;
       updateComboDisplay();
     }
@@ -490,10 +619,34 @@ public class ScythePanel extends JPanel {
     if (guiComboRemaining > 0) {
       guiComboRemaining--;
       updateComboDisplay();
+
+      // 落子后清除 GUI 优先标志（允许引擎同步）
+      if (guiComboRemaining > 0) {
+        guiComboAuthority = false; // 第一手落子后，允许引擎同步
+      }
+
       // 连击结束时停止闪烁
       if (guiComboRemaining == 0) {
+        guiComboAuthority = false; // 连击结束，清除标志
         stopFlash();
       }
     }
+  }
+
+  /**
+   * 获取镰刀连击的玩家颜色（供 BoardRenderer 强制渲染使用）
+   *
+   * @return Stone.BLACK 或 Stone.WHITE
+   */
+  public featurecat.lizzie.rules.Stone getScythePlayerStone() {
+    return guiComboPlayer
+        ? featurecat.lizzie.rules.Stone.BLACK
+        : featurecat.lizzie.rules.Stone.WHITE;
+  }
+
+  /** 清除 AI 镰刀标志（连击完成后调用） 用于在 AI 镰刀连击结束后重置状态 */
+  public void clearAiScythe() {
+    isAiScythe = false;
+    System.err.println("[ScythePanel] AI 镰刀标志已清除");
   }
 }
