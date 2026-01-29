@@ -1,0 +1,40 @@
+# Complete test: White scythe trigger and 3 consecutive moves
+boardsize 11
+clear_board
+
+# Play 10 moves
+play B H8
+play W G7
+play B H7
+play W G6
+play B F6
+play W F7
+play B F8
+play W E8
+play B G8
+play W E7
+
+# Trigger WHITE scythe (even though next player is Black)
+kata-set-param scythe_trigger_player white
+kata-set-param scythe_trigger true
+showboard
+
+# White makes first scythe move
+play W H6
+showboard
+kata-get-scythe-status
+
+# White makes second scythe move
+play W J7
+showboard
+kata-get-scythe-status
+
+# White makes third scythe move
+play W J6
+showboard
+kata-get-scythe-status
+
+# Now should be Black's turn (combo finished)
+kata-get-scythe-status
+
+quit

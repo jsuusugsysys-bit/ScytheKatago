@@ -1,0 +1,16 @@
+boardsize 11
+clear_board
+play B F6
+play W E5
+play B D6
+play W F5
+play B E6
+play W G5
+play B E7
+play W D5
+play B C6
+play W F4
+play B G6
+play W E4
+kata-analyze B interval 100 maxmoves 5
+quit

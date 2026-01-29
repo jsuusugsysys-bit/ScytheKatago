@@ -1,0 +1,30 @@
+# KataGo 镰刀修复验证测试脚本
+# 通过 GTP 命令测试新功能
+
+# 1. 测试 kata-scythe-trigger 命令
+boardsize 11
+clear_board
+kata-get-scythe-status
+kata-scythe-trigger
+
+# 2. 验证 Pass 不再被拦截 (ENABLE_PASS_SCYTHE_INTERCEPTION = false)
+boardsize 11
+clear_board
+play b pass
+# 应该正常执行 pass，而不是触发镰刀
+
+# 3. 测试镰刀状态查询
+kata-get-scythe-status
+kata-get-scythe-count
+
+# 4. 测试参数设置（验证 goto 已移除）
+kata-set-param scythe_trigger true
+kata-set-param scythe_count_black 2
+kata-set-param scythe_count_white 1
+kata-get-scythe-status
+
+# 5. 测试 scythe_reset 命令（验证 const_cast 已移除）
+scythe_reset
+kata-get-scythe-status
+
+quit

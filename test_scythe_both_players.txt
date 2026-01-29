@@ -1,0 +1,45 @@
+# 测试黑白双方镰刀机制
+
+# 场景1: 白棋触发镰刀
+boardsize 11
+clear_board
+play black D4
+play white Q16
+
+# 白方触发镰刀
+kata-set-param scythe_trigger true
+genmove white
+# 预期：白棋连下3步
+
+kata-get-scythe-status
+# 预期：whiteScythes=2, scytheCombo=0
+
+# 场景2: AI(黑)思考时，预见玩家(白)可能使用镰刀
+clear_board
+kata-set-scythe-count white 3
+kata-set-scythe-count black 3
+
+play black D4
+# 黑方思考时，应该在搜索树中看到"白棋可能触发镰刀连下3步"的路径
+
+genmove black
+kata-get-scythe-status
+
+# 场景3: 黑白交替使用镰刀
+clear_board
+kata-set-scythe-count white 3
+kata-set-scythe-count black 3
+
+# 黑棋使用镰刀
+kata-set-param scythe_trigger true
+genmove black
+kata-get-scythe-status
+# 预期：blackScythes=2
+
+# 白棋使用镰刀
+kata-set-param scythe_trigger true
+genmove white
+kata-get-scythe-status
+# 预期：whiteScythes=2
+
+quit

@@ -3,5 +3,6 @@
     "allow": [
       "Bash(findstr:*)"
     ]
-  }
+  },
+  "outputStyle": "Explanatory"
 }

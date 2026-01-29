@@ -1,15 +1,101 @@
 # Git ignore for ScytheKatago
+
+# ============ 编译输出 ============
+build/
 KataGo/cpp/build/
 lizzieyzy-main/target/
 *.exe
 *.obj
 *.o
 *.dll
-*.log
-node_modules/
-*.class
-.claude/plans/
-.claude/CLAUDE.local.md
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# ============ 大文件（模型、压缩包）============
+# 神经网络模型（超过 GitHub 100MB 限制）
+scythe_lizzie/kata1-b28c512nbt*.bin.gz
+
+# 压缩包（第三方库）
+eigen.zip
+lizzieyzy-main.zip
+飞刀.tar.xz
+
+# ============ 第三方运行时 ============
+java-1.8.0-openjdk-*/
+
+# ============ IDE 和编辑器 ============
+.vscode/
+.idea/
+*.suo
+*.user
+
+# ============ 会话和临时文件 ============
+.sessions/
 gtp_logs/
 test_scythe_input*.txt
 nul
+*.log
+
+# ============ Claude Code 相关（不公开）============
+.claude/
+claude_cli-master/
+
+# ============ 嵌入的 git 仓库（第三方代码）============
+chessdark/stockfish11/
+lizzieyzy-official/
+readboard-java-src/
+zlib/
+
+# ============ 其他 ============
+node_modules/
+*.class
+persist
+temp_extract/
+
+# ============ 数据文件 ============
+sgf_samples/
+save/
+
+# ============ 发布和打包目录（包含大文件）============
+ScytheRelease/
+ScytheEngine/
+upload_package/
+scythe_lizzie/
+
+# ============ 不需要的文档和报告 ============
+AI_SCYTHE_FIX_SUMMARY.md
+AUTO_DOWNLOAD_ALL.bat
+AUTO_DOWNLOAD_BACKGROUND.ps1
+CHECK_DOWNLOADED_FILES.md
+CLOUD_BACKUP_OPTIONS.md
+CODE_REVIEW_FIXES.md
+CREATE_MIGRATION_PACKAGE.bat
+DATA_MIGRATION_STRATEGY.md
+DOWNLOAD_MISSING_MODEL.bat
+EMERGENCY_DOWNLOAD_PLAN.md
+FINAL_COMPLETION_REPORT.md
+FIXES_SUMMARY.md
+FORCE_BUILD.bat
+MANUAL_BUILD_GUIDE.md
+MODEL_DOWNLOAD_COMPLETE.md
+NEXT_STEPS.md
+QUICK_START_RETRY.md
+RETRY_IMPLEMENTATION_SUMMARY.md
+RETRY_INTEGRATION_COMPLETE.md
+RETRY_MANAGER_README.md
+SCYTHE_ANALYZE_FIX_SUMMARY.md
+SCYTHE_SEARCH_BUG_ANALYSIS.md
+SCYTHE_SEARCH_FIX_PROPOSAL.md
+SCYTHE_SEARCH_VERIFICATION_CHECKLIST.md
+SKILL_EXTRACTION_REPORT.md
+TRAINING_DATA_DOWNLOAD_PLAN.md
+TRAINING_LOG.md
+TRAINING_STATUS.md
+VERIFICATION_REPORT.md
+
+# ============ 奇怪的路径名（Windows 错误产生）============
+D*ScytheKatago*
+ScytheEngine*cp*
+scythe_lizzie*ls*

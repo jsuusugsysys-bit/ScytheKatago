@@ -1,0 +1,22 @@
+boardsize 11
+clear_board
+kata-get-scythe-status
+play B A1
+play W A2
+play B A3
+play W A4
+play B A5
+play W A6
+play B A7
+play W A8
+play B A9
+play W A10
+kata-get-scythe-status
+kata-set-param scythe_trigger true
+play B B1
+kata-get-scythe-status
+play B B2
+kata-get-scythe-status
+play B B3
+kata-get-scythe-status
+quit

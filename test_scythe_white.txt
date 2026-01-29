@@ -1,0 +1,19 @@
+boardsize 11
+clear_board
+komi 7.5
+play black F6
+play white F5
+play black E6
+play white E5
+play black D6
+play white D5
+play black G6
+play white G5
+play black H6
+play white H5
+play black C6
+kata-set-param scythe_trigger true
+genmove white
+genmove white
+genmove white
+quit

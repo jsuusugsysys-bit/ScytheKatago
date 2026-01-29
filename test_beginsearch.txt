@@ -1,0 +1,3 @@
+boardsize 11
+genmove B
+quit

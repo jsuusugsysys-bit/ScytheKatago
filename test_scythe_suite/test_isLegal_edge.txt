@@ -1,0 +1,50 @@
+# 测试 isLegal 边界条件
+# 目标：验证镰刀连击中 isLegal 和 presumedNextMovePla 的一致性
+
+# 清空棋盘，11x11
+boardsize 11
+clear_board
+komi 7.5
+
+# 先走 10 手到达镰刀可用区间
+play B D4
+play W H4
+play B H8
+play W D8
+play B H3
+play W J3
+play B G3
+play W J4
+play B C6
+play W C7
+
+# 现在是第 11 手，黑棋可以使用镰刀
+# 查看当前状态
+kata-get-scythe-status
+
+# 触发镰刀
+kata-set-param scythe_trigger true
+
+# 黑棋第一步
+play B D6
+
+# 检查状态 - scytheCombo 应该是 2
+kata-get-scythe-status
+
+# 验证：黑棋应该能继续走
+# 如果 isLegal 正确，黑棋应该能连续走
+genmove B
+
+# 再次检查状态
+kata-get-scythe-status
+
+# 再走一手
+genmove B
+
+# 镰刀用完后状态
+kata-get-scythe-status
+
+# 现在应该轮到白棋
+genmove W
+
+quit

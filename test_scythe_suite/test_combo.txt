@@ -1,0 +1,62 @@
+# 连击逻辑测试 - 测试镰刀连击的完整流程
+# 测试场景：验证连击期间不换手，连击后正常换手
+
+boardsize 11
+clear_board
+komi 7.5
+
+# 前10手
+play black D4
+play white D8
+play black E5
+play white E7
+play black F6
+play white F8
+play black G7
+play white G9
+play black H8
+play white H10
+
+# 第11手 - 黑方触发镰刀
+kata-get-scythe-status
+kata-set-param scythe_trigger true
+
+# 连击第1手
+genmove black
+kata-get-scythe-status
+
+# 连击第2手（验证仍是黑方）
+genmove black
+kata-get-scythe-status
+
+# 连击第3手（验证仍是黑方）
+genmove black
+kata-get-scythe-status
+
+# 连击结束，验证轮到白方
+genmove white
+kata-get-scythe-status
+
+# 正常对局几手
+play black J9
+play white J8
+play black J7
+
+# 白方触发镰刀
+kata-set-param scythe_trigger true
+genmove white
+kata-get-scythe-status
+
+# 白方连击第2手
+genmove white
+kata-get-scythe-status
+
+# 白方连击第3手
+genmove white
+kata-get-scythe-status
+
+# 验证轮回黑方
+genmove black
+kata-get-scythe-status
+
+quit

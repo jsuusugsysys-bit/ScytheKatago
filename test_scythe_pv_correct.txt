@@ -1,0 +1,18 @@
+boardsize 11
+clear_board
+play B F6
+play W G6
+play B F7
+play W G7
+play B F8
+play W G8
+play B F5
+play W G5
+play B F4
+play W G4
+play B E6
+kata-set-param scythe_trigger_player black
+kata-set-param scythe_trigger true
+kata-get-scythe-status
+kata-analyze interval 100 ownership true maxmoves 5
+quit

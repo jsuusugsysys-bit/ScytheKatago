@@ -1179,8 +1179,6 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
   if(board.x_size == 11 && board.y_size == 11 && scytheCombo == 0 && manualScytheTrigger) {
     // Use GUI-specified player if set, otherwise fall back to movePla
     Player triggerPla = (manualScytheTriggerPlayer != C_EMPTY) ? manualScytheTriggerPlayer : movePla;
-    std::cerr << "[SCYTHE-DEBUG] Manual trigger, movePla=" << PlayerIO::playerToString(movePla)
-              << ", triggerPla=" << PlayerIO::playerToString(triggerPla) << std::endl;
     // Check if player has scythes left
     int scythesLeft = (triggerPla == P_BLACK) ? blackScythes : whiteScythes;
     if(scythesLeft > 0) {
@@ -1189,8 +1187,6 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
       else whiteScythes--;
       scytheCombo = 3;  // 3 consecutive moves (will be decremented to 2 below, then 2 more moves)
       scytheComboPlayer = triggerPla;  // Record which player is using the combo
-      std::cerr << "[SCYTHE-DEBUG] Scythe triggered! scytheCombo=3, scytheComboPlayer="
-                << PlayerIO::playerToString(scytheComboPlayer) << std::endl;
     }
     manualScytheTrigger = false;  // Clear the trigger after consuming
     manualScytheTriggerPlayer = C_EMPTY;  // Reset player specification
@@ -1221,28 +1217,19 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
   // Handle scytheCombo countdown
   if(board.x_size == 11 && board.y_size == 11 && scytheCombo > 0) {
     scytheCombo--;
-    std::cerr << "[SCYTHE-DEBUG] After combo--, scytheCombo=" << scytheCombo
-              << ", movePla=" << PlayerIO::playerToString(movePla)
-              << ", scytheComboPlayer=" << PlayerIO::playerToString(scytheComboPlayer) << std::endl;
     if(scytheCombo > 0) {
       // Still in combo - same player continues (use scytheComboPlayer, not movePla!)
       isScytheActive = true;
       presumedNextMovePla = scytheComboPlayer;
-      std::cerr << "[SCYTHE-DEBUG] Combo active, presumedNextMovePla="
-                << PlayerIO::playerToString(presumedNextMovePla) << std::endl;
     }
     else {
       // Combo ended - reset combo player and switch to opponent
       scytheComboPlayer = C_EMPTY;
-      std::cerr << "[SCYTHE-DEBUG] Combo ended" << std::endl;
     }
-    // If scytheCombo became 0, combo ended - normal turn switch
   }
 
   if(!isScytheActive) {
     presumedNextMovePla = getOpp(movePla);
-    std::cerr << "[SCYTHE-DEBUG] Not scythe active, presumedNextMovePla="
-              << PlayerIO::playerToString(presumedNextMovePla) << std::endl;
   }
   // --- Scythe Logic End ---
 

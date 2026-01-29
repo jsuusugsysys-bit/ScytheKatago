@@ -1,0 +1,26 @@
+# WinSCP 自动下载脚本
+# 使用方法: winscp.com /script=winscp_download_script.txt
+# 创建时间: 2026-01-24
+
+# 连接远程服务器
+open scp://jxcb:zOh17lGDsbmrcmX@123.181.192.94:60022
+
+# 下载模型文件（最重要）
+get /home/jxcb/scythe_training/models/model.txt.gz D:\scythe_training_backup\models\
+
+# 下载 KataGo 引擎
+get /home/jxcb/scythe_training/katago/cpp/build/katago D:\scythe_training_backup\binaries\
+
+# 下载重要日志
+get /home/jxcb/scythe_training/logs/train_8gpu_daemon.log D:\scythe_training_backup\logs\
+get /home/jxcb/scythe_training/logs/shuffle_daemon.log D:\scythe_training_backup\logs\
+get /home/jxcb/scythe_training/start_8gpu.log D:\scythe_training_backup\logs\
+
+# 下载导出的模型（如果有）
+get /home/jxcb/scythe_training/exported/*.bin.gz D:\scythe_training_backup\exported\
+
+# 断开连接
+close
+
+# 退出
+exit

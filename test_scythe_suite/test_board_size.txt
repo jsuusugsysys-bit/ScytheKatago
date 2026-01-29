@@ -1,0 +1,75 @@
+# 棋盘大小测试 - 验证镰刀仅在11x11棋盘生效
+# 测试场景：在9x9和19x19棋盘上尝试触发镰刀（应该失败）
+
+# 测试1：9x9棋盘
+boardsize 9
+clear_board
+komi 7.5
+
+# 前10手
+play black D4
+play white D6
+play black E5
+play white E6
+play black F5
+play white F6
+play black G5
+play white G6
+play black H5
+play white H6
+
+# 尝试触发镰刀（应该失败，因为不是11x11）
+kata-get-scythe-status
+kata-set-param scythe_trigger true
+genmove black
+kata-get-scythe-status
+
+# 测试2：19x19棋盘
+boardsize 19
+clear_board
+komi 7.5
+
+# 前10手
+play black D4
+play white D16
+play black E5
+play white E15
+play black F6
+play white F14
+play black G7
+play white G13
+play black H8
+play white H12
+
+# 尝试触发镰刀（应该失败，因为不是11x11）
+kata-get-scythe-status
+kata-set-param scythe_trigger true
+genmove black
+kata-get-scythe-status
+
+# 测试3：11x11棋盘（应该成功）
+boardsize 11
+clear_board
+komi 7.5
+
+# 前10手
+play black D4
+play white D8
+play black E5
+play white E7
+play black F6
+play white F8
+play black G7
+play white G9
+play black H8
+play white H10
+
+# 触发镰刀（应该成功）
+kata-get-scythe-status
+kata-set-param scythe_trigger true
+genmove black
+genmove black
+genmove black
+kata-get-scythe-status
+
+quit

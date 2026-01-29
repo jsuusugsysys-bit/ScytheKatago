@@ -1,0 +1,23 @@
+# Test: White scythe trigger at move 10 (when it's Black's turn)
+boardsize 11
+clear_board
+
+# Play 10 moves (alternating Black-White)
+play B H8
+play W G7
+play B H7
+play W G6
+play B F6
+play W F7
+play B F8
+play W E8
+play B G8
+play W E7
+
+# Now at move 10, next player is Black
+# GUI clicks WHITE scythe icon (even though it's Black's turn)
+kata-set-param scythe_trigger_player white
+kata-set-param scythe_trigger true
+kata-get-scythe-status
+
+quit

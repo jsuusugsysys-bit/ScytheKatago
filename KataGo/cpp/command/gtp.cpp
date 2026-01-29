@@ -382,6 +382,7 @@ struct GTPEngine {
   int gtpBlackScythes;
   int gtpWhiteScythes;
   int gtpScytheCombo;
+  Player gtpScytheComboPlayer;  // Which player is using scythe combo (C_EMPTY if no combo active)
   bool gtpManualScytheTrigger;
 
   vector<double> recentWinLossValues;
@@ -440,6 +441,7 @@ struct GTPEngine {
      gtpBlackScythes(3),
      gtpWhiteScythes(3),
      gtpScytheCombo(0),
+     gtpScytheComboPlayer(C_EMPTY),
      gtpManualScytheTrigger(false),
      recentWinLossValues(),
      lastSearchFactor(1.0),
@@ -620,6 +622,7 @@ struct GTPEngine {
     gtpBlackScythes = 3;
     gtpWhiteScythes = 3;
     gtpScytheCombo = 0;
+    gtpScytheComboPlayer = C_EMPTY;
     gtpManualScytheTrigger = false;
     clearStatsForNewGame();
   }
@@ -740,6 +743,7 @@ struct GTPEngine {
     gtpBlackScythes = correctBlackScythes;
     gtpWhiteScythes = correctWhiteScythes;
     gtpScytheCombo = finalHist.scytheCombo;
+    gtpScytheComboPlayer = finalHist.scytheComboPlayer;
 
     return true;
   }
@@ -1119,6 +1123,7 @@ struct GTPEngine {
         gtpBlackScythes = updatedHist.blackScythes;
         gtpWhiteScythes = updatedHist.whiteScythes;
         gtpScytheCombo = updatedHist.scytheCombo;
+        gtpScytheComboPlayer = updatedHist.scytheComboPlayer;
       }
       assert(suc);
       (void)suc; //Avoid warning when asserts are off
@@ -1477,6 +1482,28 @@ struct GTPEngine {
       bot->setParams(analysisParams);
       isGenmoveParams = false;
     }
+
+    // --- Scythe: Activate combo before analysis if trigger is set ---
+    const Board& board = bot->getRootBoard();
+    bool is11x11 = (board.x_size == 11 && board.y_size == 11);
+    if(gtpManualScytheTrigger && is11x11) {
+      int scythesLeft = (pla == P_BLACK) ? gtpBlackScythes : gtpWhiteScythes;
+      if(scythesLeft > 0) {
+        // Activate scythe combo for analysis
+        // This sets scytheComboPlayer, presumedNextMovePla, and rootPla
+        bot->activateScytheCombo(pla, 3);
+        // Sync GTPEngine state
+        if(pla == P_BLACK) {
+          gtpBlackScythes--;
+        } else {
+          gtpWhiteScythes--;
+        }
+        gtpScytheCombo = 3;
+        gtpScytheComboPlayer = pla;  // CRITICAL: Record which player is using the combo
+      }
+      gtpManualScytheTrigger = false;  // Clear trigger after consuming
+    }
+    // --- Scythe End ---
 
     std::function<void(const Search* search)> callback = getAnalyzeCallback(pla,args);
     bot->setAvoidMoveUntilByLoc(args.avoidMoveUntilByLocBlack,args.avoidMoveUntilByLocWhite);
@@ -2179,6 +2206,25 @@ int MainCmds::gtp(const vector<string>& args) {
   logger.write("Model name: "+ (engine->nnEval == NULL ? string() : engine->nnEval->getInternalModelName()));
   if(engine->humanEval != NULL)
     logger.write("Human SL model name: "+ (engine->humanEval->getInternalModelName()));
+
+  // Scythe: Log compute device info for debugging performance issues
+  {
+    string computeBackend = "Unknown";
+#if defined(USE_CUDA_BACKEND)
+    computeBackend = "CUDA (NVIDIA GPU)";
+#elif defined(USE_TENSORRT_BACKEND)
+    computeBackend = "TensorRT (NVIDIA GPU)";
+#elif defined(USE_OPENCL_BACKEND)
+    computeBackend = "OpenCL (GPU)";
+#elif defined(USE_EIGEN_BACKEND)
+    computeBackend = "Eigen (CPU only - NO GPU acceleration!)";
+#elif defined(USE_METAL_BACKEND)
+    computeBackend = "Metal (Apple GPU)";
+#endif
+    logger.write("[SCYTHE-INFO] Compute Backend: " + computeBackend);
+    cerr << "[SCYTHE-INFO] Compute Backend: " << computeBackend << endl;
+  }
+
   logger.write("GTP ready, beginning main protocol loop");
   //Also check loggingToStderr so that we don't duplicate the message from the log file
   if(startupPrintMessageToStderr && !logger.isLoggingToStderr()) {
@@ -2736,8 +2782,6 @@ int MainCmds::gtp(const vector<string>& args) {
              engine->scytheTriggerHistory.push_back(std::make_pair((int)engine->moveHistory.size(), playerIdx));
              maybeStartPondering = true; // Refresh analysis
              response = "Scythe triggered via param hack!";
-             cerr << "SCYTHE: Manual trigger activated at move " << engine->moveHistory.size()
-                  << " for " << (nextPla == P_BLACK ? "Black" : "White") << endl;
              goto scythe_handled;
           }
           if(paramKey == "scythe_count_black") {
@@ -3171,20 +3215,27 @@ int MainCmds::gtp(const vector<string>& args) {
               } else {
                 engine->gtpWhiteScythes--;
               }
-              // Set combo=3 BEFORE play, BoardHistory will decrement to 2
+              // Set combo=3 for first move (will be decremented to 2 below)
               engine->gtpScytheCombo = 3;
+              // CRITICAL: Record which player is using the combo
+              engine->gtpScytheComboPlayer = pla;
             }
           }
+
+          // Check if this is a combo continuation move (not a trigger move)
+          bool isComboContinuation = (engine->gtpScytheCombo > 0 && !shouldTriggerScythe);
 
           // Reset trigger flag before play
           engine->gtpManualScytheTrigger = false;
 
           // Set combo state for BoardHistory BEFORE play
+          // Use saved gtpScytheComboPlayer for state consistency
           engine->bot->setScytheState(
             engine->gtpBlackScythes,
             engine->gtpWhiteScythes,
             engine->gtpScytheCombo,
-            false
+            false,
+            engine->gtpScytheComboPlayer
           );
 
           bool suc = engine->play(loc,pla);
@@ -3192,11 +3243,24 @@ int MainCmds::gtp(const vector<string>& args) {
             responseIsError = true;
             response = "illegal move";
           } else {
-            // Sync ALL scythe state from BoardHistory (combo was decremented in makeBoardMoveAssumeLegal)
+            // GTP layer directly manages combo countdown to ensure correctness
+            // Decrement AFTER successful play
+            if(engine->gtpScytheCombo > 0) {
+              engine->gtpScytheCombo--;
+              // If combo ended, clear combo player
+              if(engine->gtpScytheCombo == 0) {
+                engine->gtpScytheComboPlayer = C_EMPTY;
+              }
+            }
+
+            // Sync scythe counts from BoardHistory (but NOT combo - we manage that above)
             const BoardHistory& updatedHist = engine->bot->getRootHist();
             engine->gtpBlackScythes = updatedHist.blackScythes;
             engine->gtpWhiteScythes = updatedHist.whiteScythes;
-            engine->gtpScytheCombo = updatedHist.scytheCombo;
+            // Sync combo state back to BoardHistory to keep them consistent
+            BoardHistory& mutableHist = const_cast<BoardHistory&>(updatedHist);
+            mutableHist.scytheCombo = engine->gtpScytheCombo;
+            mutableHist.scytheComboPlayer = engine->gtpScytheComboPlayer;
           }
           maybeStartPondering = true;
         }

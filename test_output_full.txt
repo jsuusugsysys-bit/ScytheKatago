@@ -1,0 +1,56 @@
+KataGo v1.16.4
+Using Chinese rules initially, unless GTP/GUI overrides this
+Initializing board with boardXSize 11 boardYSize 11
+Loaded config ScytheEngine/scythe_config.cfg
+Loaded model ScytheEngine/scythe11.bin.gz
+Model name: scythe11-v1
+GTP ready, beginning main protocol loop
+= 
+
+= 
+
+= 
+
+= 
+
+= 
+
+= 
+
+= 
+
+= 
+
+= 
+
+= 
+
+= 
+
+= 
+
+= 
+
+SCYTHE: Trigger player set to Black
+= Scythe trigger player set to Black
+
+SCYTHE: Immediately activated for Black (GUI-specified: yes), combo=3, scythesLeft=2
+SCYTHE: Cleared search tree for fresh analysis
+= Scythe activated immediately for analysis!
+
+= {"blackScythes":2,"canUseScythe":true,"isComboActive":true,"moveNumber":11,"nextPlayer":"B","scytheCombo":3,"whiteScythes":3}
+
+=
+DEBUG analyzeAsync: movePla=1 rootPla=1 callbackPeriod=1 firstCallbackAfter=1 hasCallback=yes
+DEBUG: usingCallbackLoop=1
+SCYTHE: Disabled graph search for 11x11, cleared tree once
+DEBUG: callbackLoop thread started
+DEBUG: waiting for isSearchBegun
+DEBUG: searchBegun lambda called
+DEBUG: isSearchBegun set to true
+DEBUG: callbackLoop entering main loop
+DEBUG: waiting for 1 seconds
+DEBUG: callbackLoopShouldStop after wait
+
+= 
+

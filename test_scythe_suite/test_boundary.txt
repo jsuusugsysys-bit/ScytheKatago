@@ -1,0 +1,86 @@
+# 边界条件测试 - 测试镰刀在不同手数的可用性
+# 测试场景：第10手（不可用）、第11手（可用）、第49手（可用）、第50手（不可用）
+
+boardsize 11
+clear_board
+komi 7.5
+
+# 测试1：第10手尝试触发镰刀（应该失败或无效）
+play black D4
+play white D8
+play black E5
+play white E7
+play black F6
+play white F8
+play black G7
+play white G9
+play black H8
+
+# 第10手 - 尝试触发镰刀（不在11-49范围内）
+kata-get-scythe-status
+kata-set-param scythe_trigger true
+genmove white
+
+# 验证镰刀未触发
+kata-get-scythe-status
+
+# 测试2：第11手触发镰刀（应该成功）
+kata-set-param scythe_trigger true
+genmove black
+genmove black
+genmove black
+
+# 验证镰刀成功触发
+kata-get-scythe-status
+
+# 继续对局到接近第49手
+play white J9
+play black A1
+play white A2
+play black A3
+play white A4
+play black A5
+play white A6
+play black A7
+play white A8
+play black A9
+play white A10
+play black B1
+play white B2
+play black B3
+play white B4
+play black B5
+play white B6
+play black B7
+play white B8
+play black B9
+play white B10
+play black C1
+play white C2
+play black C3
+play white C4
+play black C5
+play white C6
+play black C7
+play white C8
+play black C9
+play white C10
+
+# 第49手 - 触发镰刀（最后机会）
+kata-get-scythe-status
+kata-set-param scythe_trigger true
+genmove black
+genmove black
+genmove black
+
+# 验证第49手镰刀成功
+kata-get-scythe-status
+
+# 第50手后尝试触发（应该失败）
+kata-set-param scythe_trigger true
+genmove white
+
+# 验证第50手后镰刀不可用
+kata-get-scythe-status
+
+quit

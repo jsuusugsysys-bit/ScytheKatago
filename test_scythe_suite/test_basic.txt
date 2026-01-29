@@ -1,0 +1,40 @@
+# 基本功能测试 - 测试镰刀的基本触发和连击功能
+# 测试场景：黑方在第11手触发镰刀，连续下3手
+
+boardsize 11
+clear_board
+komi 7.5
+
+# 前10手正常对局
+play black D4
+play white D8
+play black E5
+play white E7
+play black F6
+play white F8
+play black G7
+play white G9
+play black H8
+play white H10
+
+# 第11手 - 黑方触发镰刀
+kata-get-scythe-status
+kata-set-param scythe_trigger true
+genmove black
+
+# 连击第2手（黑方继续）
+kata-get-scythe-status
+genmove black
+
+# 连击第3手（黑方继续）
+kata-get-scythe-status
+genmove black
+
+# 连击结束，轮到白方
+kata-get-scythe-status
+genmove white
+
+# 验证镰刀数量减少
+kata-get-scythe-status
+
+quit

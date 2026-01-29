@@ -1,0 +1,18 @@
+boardsize 11
+clear_board
+play B F6
+play W F5
+play B E6
+play W E5
+play B D6
+play W D5
+play B C6
+play W C5
+play B G6
+play W G5
+kata-get-scythe-status
+kata-set-param scythe_trigger_player white
+kata-set-param scythe_trigger true
+kata-get-scythe-status
+kata-analyze W 50
+quit

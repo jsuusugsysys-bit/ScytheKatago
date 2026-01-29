@@ -1,0 +1,64 @@
+# 重置功能测试 - 测试镰刀重置命令
+# 测试场景：使用镰刀后重置，验证镰刀数恢复到3
+
+boardsize 11
+clear_board
+komi 7.5
+
+# 前10手
+play black D4
+play white D8
+play black E5
+play white E7
+play black F6
+play white F8
+play black G7
+play white G9
+play black H8
+play white H10
+
+# 初始状态
+kata-get-scythe-status
+
+# 黑方使用1次镰刀
+kata-set-param scythe_trigger true
+genmove black
+genmove black
+genmove black
+kata-get-scythe-status
+
+# 白方使用1次镰刀
+kata-set-param scythe_trigger true
+genmove white
+genmove white
+genmove white
+kata-get-scythe-status
+
+# 重置黑方镰刀数
+kata-set-param scythe_count_black 3
+kata-get-scythe-status
+
+# 重置白方镰刀数
+kata-set-param scythe_count_white 3
+kata-get-scythe-status
+
+# 验证重置后可以再次使用
+kata-set-param scythe_trigger true
+genmove black
+genmove black
+genmove black
+kata-get-scythe-status
+
+# 测试设置任意数量
+kata-set-param scythe_count_black 5
+kata-get-scythe-status
+
+kata-set-param scythe_count_white 0
+kata-get-scythe-status
+
+# 验证白方无法使用镰刀（数量为0）
+kata-set-param scythe_trigger true
+genmove white
+kata-get-scythe-status
+
+quit

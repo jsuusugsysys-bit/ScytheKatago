@@ -1,0 +1,76 @@
+# 双方测试 - 测试黑白双方都能正确使用镰刀
+# 测试场景：黑白双方交替使用镰刀，验证各自的镰刀数独立计数
+
+boardsize 11
+clear_board
+komi 7.5
+
+# 前10手
+play black D4
+play white D8
+play black E5
+play white E7
+play black F6
+play white F8
+play black G7
+play white G9
+play black H8
+play white H10
+
+# 初始状态
+kata-get-scythe-status
+
+# 黑方第1次镰刀
+kata-set-param scythe_trigger true
+genmove black
+genmove black
+genmove black
+kata-get-scythe-status
+
+# 白方第1次镰刀
+kata-set-param scythe_trigger true
+genmove white
+genmove white
+genmove white
+kata-get-scythe-status
+
+# 黑方第2次镰刀
+kata-set-param scythe_trigger true
+genmove black
+genmove black
+genmove black
+kata-get-scythe-status
+
+# 白方第2次镰刀
+kata-set-param scythe_trigger true
+genmove white
+genmove white
+genmove white
+kata-get-scythe-status
+
+# 黑方第3次镰刀（最后一次）
+kata-set-param scythe_trigger true
+genmove black
+genmove black
+genmove black
+kata-get-scythe-status
+
+# 白方第3次镰刀（最后一次）
+kata-set-param scythe_trigger true
+genmove white
+genmove white
+genmove white
+kata-get-scythe-status
+
+# 验证双方镰刀数都为0
+# 黑方尝试第4次（应该失败）
+kata-set-param scythe_trigger true
+genmove black
+kata-get-scythe-status
+
+# 白方尝试第4次（应该失败）
+kata-set-param scythe_trigger true
+genmove white
+kata-get-scythe-status
+
+quit

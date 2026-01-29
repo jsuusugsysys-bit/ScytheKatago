@@ -1,0 +1,34 @@
+boardsize 11
+clear_board
+komi 7.5
+play b f6
+play w f5
+play b e6
+play w e5
+play b d6
+play w d5
+play b g6
+play w g5
+play b h6
+play w h5
+play b c6
+kata-get-scythe-status
+kata-set-param scythe_trigger true
+play w c5
+kata-get-scythe-status
+play w c4
+kata-get-scythe-status
+play w c3
+kata-get-scythe-status
+play b b6
+kata-get-scythe-status
+kata-set-param scythe_trigger true
+play w b5
+kata-get-scythe-status
+play w b4
+kata-get-scythe-status
+play w b3
+kata-get-scythe-status
+play b a6
+kata-get-scythe-status
+quit

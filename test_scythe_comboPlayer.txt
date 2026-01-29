@@ -1,0 +1,41 @@
+# 测试 scytheComboPlayer 初始化与状态继承
+# 场景: 触发镰刀后请求分析，验证 comboPlayer 被正确设置
+
+# 设置 11x11 棋盘
+boardsize 11
+
+# 清空棋盘
+clear_board
+
+# 下几步棋建立基本局面
+play b E5
+play w F5
+play b E6
+play w F6
+play b E7
+play w F7
+play b E8
+play w F8
+play b E9
+play w F9
+
+# 检查当前镰刀状态
+kata-get-scythe-status
+
+# 触发黑方镰刀
+kata-set-param scythe_trigger true
+
+# 立即请求分析（不先 play）- 这是问题的关键场景
+# 在修复前，此时 scytheComboPlayer 会是 Empty
+kata-analyze b interval 100 maxmoves 5
+
+# 等待一段时间让分析运行
+# (在实际测试中，我们通过观察输出来验证)
+
+# 停止分析
+stop
+
+# 检查镰刀状态 - 应该显示 combo 激活
+kata-get-scythe-status
+
+quit

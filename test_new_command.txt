@@ -1,0 +1,6 @@
+boardsize 11
+clear_board
+kata-get-scythe-status
+kata-scythe-trigger
+kata-get-scythe-status
+quit

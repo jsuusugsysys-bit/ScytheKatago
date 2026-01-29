@@ -1,0 +1,197 @@
+# 🚨 紧急数据下载 - 快速开始指南
+
+**更新时间**: 2026-01-24 17:55
+**情况**: 远程 Linux 服务器即将回收,需要立即下载镰刀训练数据
+
+---
+
+## 📋 下载方案选择
+
+根据你的系统环境选择合适的下载方案:
+
+### 🟢 方案 1: WinSCP 自动下载（推荐,完全自动化）
+
+**优点**:
+- ✅ 完全自动化,无需手动输入密码
+- ✅ 支持断点续传
+- ✅ 下载速度快
+
+**使用方法**:
+1. 双击运行: `RUN_WINSCP_AUTO_DOWNLOAD.bat`
+2. 等待下载完成（5-10 分钟）
+3. 自动创建迁移包（可选）
+
+**要求**: 系统已安装 WinSCP（桌面上有图标）
+
+---
+
+### 🟡 方案 2: 命令行下载（需要输入密码）
+
+**优点**:
+- ✅ 使用 scp 命令,速度快
+- ⚠️ 需要手动输入密码 4-5 次
+
+**使用方法**:
+1. 双击运行: `AUTO_DOWNLOAD_ALL.bat`
+2. 根据提示输入密码: `zOh17lGDsbmrcmX`
+3. 等待下载完成
+
+**要求**: 系统已安装 Git for Windows 或 OpenSSH
+
+---
+
+### 🟠 方案 3: WinSCP GUI 手动下载（最保险）
+
+**优点**:
+- ✅ 可视化操作,直观
+- ✅ 可以选择性下载
+
+**使用方法**:
+1. 打开桌面上的 **WinSCP**
+2. 输入连接信息:
+   - 主机: `123.181.192.94`
+   - 端口: `60022`
+   - 用户名: `jxcb`
+   - 密码: `zOh17lGDsbmrcmX`
+3. 点击"登录"
+4. 右侧切换到: `/home/jxcb/scythe_training/`
+5. 左侧切换到: `D:\scythe_training_backup\`
+6. 下载以下文件（拖拽到左侧）:
+   - `models/model.txt.gz` (4.8 MB) - **必须下载**
+   - `katago/cpp/build/katago` (50 MB) - 建议下载
+   - `logs/train_8gpu_daemon.log` (17 MB) - 可选
+
+**详细步骤**: 见 `EMERGENCY_DOWNLOAD_PLAN.md`
+
+---
+
+## ✅ 下载完成后
+
+### 步骤 1: 验证下载
+
+运行命令检查:
+```batch
+dir D:\scythe_training_backup\models\model.txt.gz
+dir D:\scythe_training_backup\binaries\katago
+```
+
+**必须确认**: `model.txt.gz` 存在且大小 ~4.8 MB
+
+### 步骤 2: 创建迁移包
+
+双击运行: `CREATE_MIGRATION_PACKAGE.bat`
+
+这会整理所有需要上传到新服务器的文件到:
+`D:\ScytheKatago\migration_package\`
+
+### 步骤 3: 等待租用新服务器
+
+准备好迁移包后,下次租用新的 8 卡 GPU 服务器时:
+
+1. 使用 WinSCP 上传 `migration_package` 到新服务器
+2. SSH 登录新服务器
+3. 运行自动部署脚本:
+   ```bash
+   cd ~/scythe_training
+   chmod +x deploy_new_server.sh
+   ./deploy_new_server.sh
+   ```
+
+---
+
+## 📊 已下载的文件清单
+
+根据 `D:\scythe_training_backup\` 目录检查:
+
+✅ **已下载**:
+- 配置文件: 9 个（`configs/`）
+- 启动脚本: `start_8gpu.sh` 和 20+ 个辅助脚本
+- 文档: `TRAINING_GUIDE.md`, `OPTIMIZATION_PLAN.md`
+
+❌ **缺失（需要立即下载）**:
+- **模型文件**: `models/model.txt.gz` (4.8 MB) - **最重要!**
+- KataGo 引擎: `binaries/katago` (50 MB) - 建议下载
+- 训练日志: `logs/*.log` - 可选
+
+---
+
+## 🚨 紧急提醒
+
+### 时间敏感
+
+远程服务器即将回收,**必须立即下载**以下关键文件:
+
+1. ✅ `start_8gpu.sh` - 已下载
+2. ✅ `configs/selfplay_scythe.cfg` - 已下载
+3. ❌ `models/model.txt.gz` - **立即下载!**
+
+### 如果来不及下载模型
+
+**备选方案**: 使用本地 KataGo 官方模型
+```batch
+copy D:\ScytheKatago\kata1-b6c96.bin.gz D:\scythe_training_backup\models\
+```
+
+**影响**: 丢失远程训练进度（~15 小时），需要从头训练
+
+---
+
+## 📂 重要文件位置
+
+| 文件 | 路径 | 说明 |
+|------|------|------|
+| 下载计划 | `D:\ScytheKatago\EMERGENCY_DOWNLOAD_PLAN.md` | 完整下载指南 |
+| 自动下载（WinSCP） | `D:\ScytheKatago\RUN_WINSCP_AUTO_DOWNLOAD.bat` | **推荐** |
+| 自动下载（scp） | `D:\ScytheKatago\AUTO_DOWNLOAD_ALL.bat` | 需要输入密码 |
+| 已下载文件 | `D:\scythe_training_backup\` | 备份目录 |
+| 创建迁移包 | `D:\ScytheKatago\CREATE_MIGRATION_PACKAGE.bat` | 下载后运行 |
+| 文件检查清单 | `D:\ScytheKatago\CHECK_DOWNLOADED_FILES.md` | 验证下载 |
+
+---
+
+## ❓ 常见问题
+
+### Q1: WinSCP.com 未找到怎么办?
+
+**解决**:
+1. 打开 WinSCP GUI
+2. 菜单: 工具 → 安装命令行工具
+3. 或使用方案 2（AUTO_DOWNLOAD_ALL.bat）
+
+### Q2: 下载速度很慢怎么办?
+
+**解决**:
+- 先下载优先级 1 的文件（model.txt.gz，只有 4.8 MB）
+- 其他大文件可以选择性下载
+
+### Q3: 模型文件下载失败怎么办?
+
+**解决**:
+- 使用 WinSCP GUI 手动下载（方案 3）
+- 或使用本地备选模型 `kata1-b6c96.bin.gz`
+
+### Q4: 下载完成后做什么?
+
+**步骤**:
+1. 运行 `CREATE_MIGRATION_PACKAGE.bat` 创建迁移包
+2. 等待租用新服务器
+3. 上传迁移包到新服务器
+4. 运行 `deploy_new_server.sh` 自动部署
+
+---
+
+## 📞 联系方式
+
+如有问题,查看详细文档:
+- `EMERGENCY_DOWNLOAD_PLAN.md` - 完整下载计划
+- `CHECK_DOWNLOADED_FILES.md` - 文件检查清单
+- `.sessions/handoff_katago.md` - 训练工作线交接文档
+
+---
+
+**快速开始**: 双击运行 `RUN_WINSCP_AUTO_DOWNLOAD.bat` 立即开始自动下载！
+
+**预计时间**: 5-10 分钟
+**下载大小**: ~80 MB（必须文件）或 ~250 MB（完整下载）
+
+祝数据迁移顺利！🚀

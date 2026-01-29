@@ -1,0 +1,62 @@
+# 镰刀数量测试 - 测试镰刀次数限制（每方3次）
+# 测试场景：黑方连续使用3次镰刀，第4次应该无法触发
+
+boardsize 11
+clear_board
+komi 7.5
+
+# 前10手
+play black D4
+play white D8
+play black E5
+play white E7
+play black F6
+play white F8
+play black G7
+play white G9
+play black H8
+play white H10
+
+# 初始状态：黑方3次，白方3次
+kata-get-scythe-status
+
+# 第1次镰刀 - 黑方
+kata-set-param scythe_trigger true
+genmove black
+genmove black
+genmove black
+kata-get-scythe-status
+
+# 白方正常下1手
+play white J9
+
+# 第2次镰刀 - 黑方
+kata-set-param scythe_trigger true
+genmove black
+genmove black
+genmove black
+kata-get-scythe-status
+
+# 白方正常下1手
+play white J8
+
+# 第3次镰刀 - 黑方（最后一次）
+kata-set-param scythe_trigger true
+genmove black
+genmove black
+genmove black
+kata-get-scythe-status
+
+# 白方正常下1手
+play white J7
+
+# 尝试第4次镰刀 - 黑方（应该失败，镰刀数为0）
+kata-set-param scythe_trigger true
+genmove black
+kata-get-scythe-status
+
+# 验证黑方镰刀数为0，无法再触发
+genmove white
+kata-get-scythe-status
+
+quit

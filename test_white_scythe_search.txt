@@ -1,0 +1,28 @@
+# Test: White scythe with search analysis
+boardsize 11
+clear_board
+
+# Play 11 moves (White's turn at move 12)
+play B H8
+play W G7
+play B H7
+play W G6
+play B F6
+play W F7
+play B F8
+play W E8
+play B G8
+play W E7
+play B D8
+
+# Now it's White's turn (move 12)
+showboard
+
+# Trigger WHITE scythe
+kata-set-param scythe_trigger_player white
+kata-set-param scythe_trigger true
+
+# Analyze for White (should search White's 3 consecutive moves)
+kata-analyze W interval 1000 maxmoves 3
+
+quit
